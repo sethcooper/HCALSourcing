@@ -31,7 +31,7 @@ process.es_ascii = cms.ESSource("HcalTextCalibrations",
 )
 process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
 
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(1) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use

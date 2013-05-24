@@ -25,7 +25,9 @@ process.es_ascii = cms.ESSource("HcalTextCalibrations",
  input = cms.VPSet(
    cms.PSet(
      object = cms.string('ElectronicsMap'),
-     file = cms.FileInPath('HCALSourcing/HCALFWAnalyzer/emap_H2_25oct2012.txt')
+     #file = cms.FileInPath('HCALSourcing/HCALFWAnalyzer/emap_H2_25oct2012.txt')
+     #file = cms.FileInPath('HCALSourcing/HCALFWAnalyzer/emap_HCAL_H2_BI_jan2013_1.txt')
+     file = cms.FileInPath('HCALSourcing/HCALFWAnalyzer/emap_HCAL_H2_BI_modSIC_apr2013.txt')
    )
  )
 )
@@ -36,15 +38,23 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use
     fileNames = cms.untracked.vstring(
-        'file:HTB_006062.root'
+        #'file:HTB_006062.root' # 200 Hz
+        # H2 milestone run
         #'file:HTB_006036.root'
         #file:HTB_006080.root'
         #'file:HTB_006067.root'
         #'file:HTB_006058.root'
-        # long run at 100 Hz
+        # long run at 100 Hz: http://cmsonline.cern.ch/cms-elog/804086
         #'file:HTB_006087.root',
         #'file:HTB_006087.1.root',
         #'file:HTB_006087.2.root'
+        # run with source driver moving: http://cmsonline.cern.ch/cms-elog/804153
+        'file:HTB_006096.root'
+        #'file:HTB_006112.root'
+        #'file:HTB_006130.root'
+        # new fw version x14803
+        #'file:HTB_006133.root'
+        #'file:HTB_006135.root'
     )
 )
 
@@ -69,10 +79,14 @@ process.hcalhistos.HcalFirstFED = cms.untracked.int32(700)
 process.hcalhistos.FEDs = cms.untracked.vint32(700)
 
 process.TFileService = cms.Service("TFileService", 
-    fileName = cms.string("hcalFWAnalyzer.root"),
+    fileName = cms.string("hcalFWAnalyzer.6096.SDMovingH2.Apr9.newEmap.root"),
+    #fileName = cms.string("hcalFWAnalyzer.6062.200Hz.Mar19.newEmap.root"),
+    #fileName = cms.string("hcalFWAnalyzer.6062.Apr9.newEmapSICMod.root"),
+    #fileName = cms.string("hcalFWAnalyzer.6135.Apr9.newEmap.root"),
 )
 
-process.hcalFWAnalyzer = cms.EDAnalyzer('HCALFWAnalyzer'
+process.hcalFWAnalyzer = cms.EDAnalyzer('HCALFWAnalyzer',
+    CheckForDuplicates = cms.bool(False)
 )
 
 process.load("FWCore.Modules.printContent_cfi")

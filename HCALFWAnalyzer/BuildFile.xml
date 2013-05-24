@@ -3,4 +3,5 @@
 <use name="FWCore/ParameterSet"/>
 <use name="EventFilter/HcalRawToDigi"/>
 <use name="PhysicsTools/UtilAlgos"/>
+<use name="DataFormats/HcalRecHit"/>
 <flags EDM_PLUGIN="1"/>

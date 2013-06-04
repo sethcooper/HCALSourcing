@@ -88,24 +88,21 @@ namespace hcaltb {
     //TODO add MOTOR_VOLTAGE
     //TODO remove second timestamp
     //TODO these are all ints in the object; should be doubles?
-    hspd.set(sp_dblmap["MESSAGE"], //int message_counter
-		 sp_dblmap["TIME_STAMP1"],//int timestamp1_sec
-		 sp_dblmap["TIME_STAMP2"],//int timestamp1_usec
-		 -1,//int timestamp2_sec
-		 -1,//int timestamp2_usec
-		 sp_dblmap["MESSAGE"],//int status
-		 sp_dblmap["INDEX"],//int index_counter
-		 sp_dblmap["REEL"],//int reel_counter
-		 sp_dblmap["MOTOR_CURRENT"],//int motor_current
-		 -1,//int speed
-		 -1,//int tube_id
-		 -1,//int driver_id
-     -1//int source_id
+    hspd.set(sp_dblmap["MESSAGE"], //double message_counter
+		 sp_dblmap["TIME_STAMP1"],//double timestamp1_sec
+		 sp_dblmap["TIME_STAMP2"],//double timestamp1_usec
+		 -1,//double timestamp2_sec
+		 -1,//double timestamp2_usec
+		 -1,//double status
+		 sp_dblmap["INDEX"],//double index_counter
+		 sp_dblmap["REEL"],//double reel_counter
+		 sp_dblmap["MOTOR_CURRENT"],//double motor_current
+		 sp_dblmap["MOTOR_VOLTAGE"],//double motor_voltage
+		 -1,//double tube_id
+		 -1,//double driver_id
+     -1//double source_id
                  );
-
-    return;
   }
-
 
 }
 

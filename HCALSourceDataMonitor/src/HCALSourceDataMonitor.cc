@@ -13,7 +13,7 @@
 //
 // Original Author:  Seth Cooper,32 4-B03,+41227675652,
 //         Created:  Tue Jul  2 10:47:48 CEST 2013
-// $Id$
+// $Id: HCALSourceDataMonitor.cc,v 1.1 2013/07/02 13:34:42 scooper Exp $
 //
 //
 
@@ -22,6 +22,10 @@
 #include <memory>
 #include <string>
 #include <sstream>
+#include <vector>
+#include <set>
+#include <iostream>
+#include <fstream>
 
 // user include files
 #include "FWCore/Framework/interface/Frameworkfwd.h"
@@ -41,15 +45,16 @@
 #include "TGraphErrors.h"
 #include "TFile.h"
 #include "TDirectory.h"
+#include "TCanvas.h"
 //
 // class declaration
 //
 struct RawHistoData
 {
   RawHistoData() { }
-  RawHistoData(std::string tubeName)
+  RawHistoData(std::string setTubeName)
   {
-    tubeName = tubeName;
+    tubeName = setTubeName;
   }
 
   std::string tubeName;
@@ -76,8 +81,12 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
       virtual void endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
 
+      void startHtml();
+      void appendHtml(std::string tubeName, std::vector<std::string>& imageNames);
+      void finishHtml();
       // ----------member data ---------------------------
       std::string rootFileName_;
+      std::string htmlFileName_;
       int naiveEvtNum_;
       TFile* rootFile_;
       std::map<HcalDetId,RawHistoData> detIdToRawHistoDataMap_;
@@ -200,7 +209,8 @@ bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName)
 // constructors and destructor
 //
 HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
-  rootFileName_ (iConfig.getParameter<std::string>("RootFileName"))
+  rootFileName_ (iConfig.getParameter<std::string>("RootFileName")),
+  htmlFileName_ (iConfig.getParameter<std::string>("HtmlFileName"))
 {
   //now do what ever initialization is neededCheckForDuplicates
   naiveEvtNum_ = 0;
@@ -223,6 +233,63 @@ HCALSourceDataMonitor::~HCALSourceDataMonitor()
 //
 // member functions
 //
+void HCALSourceDataMonitor::startHtml()
+{
+  using namespace std;
+  ofstream htmlFile(htmlFileName_);
+  if(htmlFile.is_open())
+  {
+    htmlFile << "<!DOCTYPE html>\n";
+    htmlFile << "<html>\n";
+    htmlFile << "<head>\n";
+    htmlFile << "<title>Histogram Data" << "</title>\n";
+    htmlFile << "</head>\n";
+    htmlFile << "<body>\n";
+    htmlFile << "<h2>Histogram Data</h2>\n";
+    htmlFile << "<hr>\n";
+    htmlFile.close();
+  }
+}
+//
+void HCALSourceDataMonitor::appendHtml(std::string tubeName, std::vector<std::string>& imageNames)
+{
+  using namespace std;
+  ofstream htmlFile(htmlFileName_, ios::out | ios::app);
+  if(htmlFile.is_open())
+  {
+    htmlFile << "<h3>Tube name: " << tubeName << "</h3>\n";
+    htmlFile << "<table>\n";
+    htmlFile << "<tr>\n";
+    int counter = 0;
+    for(std::vector<std::string>::const_iterator imageName = imageNames.begin(); imageName != imageNames.end();
+        ++imageName)
+    {
+      if(counter % 4 == 0) // new row every 4
+      {
+        htmlFile << "</tr>\n";
+        htmlFile << "<tr>\n";
+      }
+      htmlFile << "<td><a href=\"" << *imageName << "\"><img width=450 src=\"" << *imageName << "\"></a></td>\n";
+      ++counter;
+    }
+    htmlFile << "</tr>\n";
+    htmlFile << "</table>\n";
+    htmlFile << "<hr>\n";
+    htmlFile.close();
+  }
+}
+//
+void HCALSourceDataMonitor::finishHtml()
+{
+  using namespace std;
+  ofstream htmlFile(htmlFileName_, ios::out | ios::app);
+  if(htmlFile.is_open())
+  {
+    htmlFile << "</body>\n";
+    htmlFile << "</html>\n";
+    htmlFile.close();
+  }
+}
 
 // ------------ method called for each event  ------------
 void
@@ -350,51 +417,66 @@ HCALSourceDataMonitor::endJob()
   using namespace std;
   // now make plots of avgVal vs. event number
   rootFile_->cd();
+  vector<string> imageNamesThisTube; 
+  set<string> tubeNameSet;
   for(map<HcalDetId,RawHistoData>::const_iterator itr = detIdToRawHistoDataMap_.begin();
       itr != detIdToRawHistoDataMap_.end(); ++itr)
   {
     RawHistoData data = itr->second;
-    // compute avg y value for plot scaling
-    double yavg = 0;
-    int count = 0;
-    for(std::vector<double>::const_iterator i = data.histoAverages.begin(); i != data.histoAverages.end(); ++i)
-    {
-      yavg+=*i;
-      count++;
-    }
-    yavg/=count;
-    // make eventNum errs
-    vector<double> eventNumErrs;
-    for(std::vector<double>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
-      eventNumErrs.push_back(0);
-    // make plot
-    //TGraphErrors* thisGraph = new TGraphErrors(data.eventNumbers.size(),&(*data.eventNumbers.begin()),
-    //    &(*data.histoAverages.begin()),&(*eventNumErrs.begin()),&(*data.histoRMSs.begin()));
-    TGraph* thisGraph = new TGraph(data.eventNumbers.size(),&(*data.eventNumbers.begin()),&(*data.histoAverages.begin()));
-    thisGraph->SetTitle(getGraphName(itr->first).c_str());
-    thisGraph->SetName(getGraphName(itr->first).c_str());
-    thisGraph->Draw();
-    thisGraph->GetXaxis()->SetTitle("Event");
-    //thisGraph->GetYaxis()->SetTitle("hist. mean+/-RMS [ADC]");
-    thisGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
-    thisGraph->GetYaxis()->SetRangeUser(yavg-0.5,yavg+0.5);
-    thisGraph->SetMarkerStyle(33);
-    thisGraph->SetMarkerSize(0.8);
-    thisGraph->Write();
-    delete thisGraph;
-    //debug
-    //cout << "Readout channel: " << getGraphName(itr->first) << endl;
-    //cout << "event numbers: " << endl;
-    //for(std::vector<double>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
-    //{
-    //  cout << "\t" << *i << endl;
-    //}
-    //cout << "histoAvgs: " << endl;
-    //for(std::vector<double>::const_iterator i = data.histoAverages.begin(); i != data.histoAverages.end(); ++i)
-    //{
-    //  cout << "\t" << *i << endl;
-    //}
+    tubeNameSet.insert(data.tubeName);
   }
+
+  startHtml();
+  for(set<string>::const_iterator tubeItr = tubeNameSet.begin(); tubeItr != tubeNameSet.end(); ++tubeItr)
+  {
+    string thisTube = *tubeItr;
+    imageNamesThisTube.clear();
+    for(map<HcalDetId,RawHistoData>::const_iterator itr = detIdToRawHistoDataMap_.begin();
+        itr != detIdToRawHistoDataMap_.end(); ++itr)
+    {
+      RawHistoData data = itr->second;
+      if(data.tubeName != thisTube) // only consider current tube
+        continue;
+
+      // compute avg y value for plot scaling
+      double yavg = 0;
+      int count = 0;
+      for(std::vector<double>::const_iterator i = data.histoAverages.begin(); i != data.histoAverages.end(); ++i)
+      {
+        yavg+=*i;
+        count++;
+      }
+      yavg/=count;
+      // make eventNum errs
+      vector<double> eventNumErrs;
+      for(std::vector<double>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
+        eventNumErrs.push_back(0);
+      // make plot
+      //TGraphErrors* thisGraph = new TGraphErrors(data.eventNumbers.size(),&(*data.eventNumbers.begin()),
+      //    &(*data.histoAverages.begin()),&(*eventNumErrs.begin()),&(*data.histoRMSs.begin()));
+      TGraph* thisGraph = new TGraph(data.eventNumbers.size(),&(*data.eventNumbers.begin()),&(*data.histoAverages.begin()));
+      string graphName = getGraphName(itr->first);
+      thisGraph->SetTitle(graphName.c_str());
+      thisGraph->SetName(graphName.c_str());
+      thisGraph->Draw();
+      thisGraph->GetXaxis()->SetTitle("Event");
+      //thisGraph->GetYaxis()->SetTitle("hist. mean+/-RMS [ADC]");
+      thisGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
+      thisGraph->GetYaxis()->SetRangeUser(yavg-0.5,yavg+0.5);
+      thisGraph->SetMarkerStyle(33);
+      thisGraph->SetMarkerSize(0.8);
+      TCanvas* canvas = new TCanvas("canvas","canvas",900,600);
+      canvas->cd();
+      thisGraph->Draw("ap");
+      thisGraph->Write();
+      canvas->Print((graphName+".png").c_str());
+      imageNamesThisTube.push_back(graphName+".png");
+      delete canvas;
+      delete thisGraph;
+    }
+    appendHtml(thisTube,imageNamesThisTube);
+  }
+  finishHtml();
   rootFile_->Close();
 }
 

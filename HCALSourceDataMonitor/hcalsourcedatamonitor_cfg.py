@@ -69,7 +69,8 @@ process.hcalhistos.FEDs = cms.untracked.vint32(700)
 #)
 
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
-    RootFileName = cms.string('hcalSourceDataMon.root')
+    RootFileName = cms.string('hcalSourceDataMon.root'),
+    HtmlFileName = cms.string('test.html')
 )
 
 process.load("FWCore.Modules.printContent_cfi")

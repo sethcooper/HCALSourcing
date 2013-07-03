@@ -13,7 +13,7 @@
 //
 // Original Author:  Seth Cooper,32 4-B03,+41227675652,
 //         Created:  Tue Jul  2 10:47:48 CEST 2013
-// $Id: HCALSourceDataMonitor.cc,v 1.1 2013/07/02 13:34:42 scooper Exp $
+// $Id: HCALSourceDataMonitor.cc,v 1.2 2013/07/02 19:56:43 scooper Exp $
 //
 //
 
@@ -87,6 +87,8 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       // ----------member data ---------------------------
       std::string rootFileName_;
       std::string htmlFileName_;
+      int newRowEvery_;
+      int thumbnailSize_;
       int naiveEvtNum_;
       TFile* rootFile_;
       std::map<HcalDetId,RawHistoData> detIdToRawHistoDataMap_;
@@ -209,8 +211,10 @@ bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName)
 // constructors and destructor
 //
 HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
-  rootFileName_ (iConfig.getParameter<std::string>("RootFileName")),
-  htmlFileName_ (iConfig.getParameter<std::string>("HtmlFileName"))
+  rootFileName_ (iConfig.getUntrackedParameter<std::string>("RootFileName","hcalSourceDataMon.root")),
+  htmlFileName_ (iConfig.getUntrackedParameter<std::string>("HtmlFileName","test.html")),
+  newRowEvery_ (iConfig.getUntrackedParameter<int>("NewRowEvery",3)),
+  thumbnailSize_ (iConfig.getUntrackedParameter<int>("ThumbnailSize",350))
 {
   //now do what ever initialization is neededCheckForDuplicates
   naiveEvtNum_ = 0;
@@ -264,12 +268,12 @@ void HCALSourceDataMonitor::appendHtml(std::string tubeName, std::vector<std::st
     for(std::vector<std::string>::const_iterator imageName = imageNames.begin(); imageName != imageNames.end();
         ++imageName)
     {
-      if(counter % 4 == 0) // new row every 4
+      if(counter % newRowEvery_ == 0)
       {
         htmlFile << "</tr>\n";
         htmlFile << "<tr>\n";
       }
-      htmlFile << "<td><a href=\"" << *imageName << "\"><img width=450 src=\"" << *imageName << "\"></a></td>\n";
+      htmlFile << "<td><a href=\"" << *imageName << "\"><img width=" << thumbnailSize_ << " src=\"" << *imageName << "\"></a></td>\n";
       ++counter;
     }
     htmlFile << "</tr>\n";

@@ -13,7 +13,7 @@
 //
 // Original Author:  Seth Cooper,32 4-B03,+41227675652,
 //         Created:  Tue Jul  2 10:47:48 CEST 2013
-// $Id: HCALSourceDataMonitor.cc,v 1.2 2013/07/02 19:56:43 scooper Exp $
+// $Id: HCALSourceDataMonitor.cc,v 1.3 2013/07/03 08:27:08 scooper Exp $
 //
 //
 
@@ -84,6 +84,7 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       void startHtml();
       void appendHtml(std::string tubeName, std::vector<std::string>& imageNames);
       void finishHtml();
+      std::string getBlockEventDirName(int event);
       // ----------member data ---------------------------
       std::string rootFileName_;
       std::string htmlFileName_;
@@ -183,26 +184,27 @@ bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName)
   using namespace std;
   int ieta = detId.ieta();
   int iphi = detId.iphi();
-  //"H2_HB_PHI11_LAYER0_SRCTUBE"; // example tube for H2
-  //"HFM01_ETA29_PHI55_T1A_SRCTUBE"; // example tube for HF/P5
+  //"H2_HB_PHI11_LAYER0_SRCTUBE" // example tube for H2
+  //"HFM01_ETA29_PHI55_T1A_SRCTUBE" // example tube for HF/P5
+  //"H2_FAKETEST_1_PHI57" // fake H2 tube
+  int tubePhi = atof(tubeName.substr(tubeName.find("PHI")+3,tubeName.find("_LAYER")-1).c_str());
   if(tubeName.find("HB") != string::npos)
   {
     // for HB, tubes go along eta (constant phi)-->keep all eta/depth for specific iphi
-    int tubePhi = atof(tubeName.substr(tubeName.find("PHI")+3,tubeName.find("_LAYER")-1).c_str());
     if(tubePhi==iphi)
       return true;
   }
-  else if(tubeName.find("HFM") != string::npos)
+  else if(tubeName.find("HFM") != string::npos || tubeName.find("HFP") != string::npos)
   {
-    //FIXME TODO
-    // for HF, tubes go into one tower
-    return false;
+    // for HF, tubes go into one tower (require same eta,phi)
+    int tubeEta = atof(tubeName.substr(tubeName.find("ETA")+3,tubeName.find("_PHI")-1).c_str());
+    if(tubeEta==ieta && tubePhi==iphi)
+      return true;
   }
-  else if(tubeName.find("HFP") != string::npos)
+  else if(tubeName.find("FAKE") != string::npos)
   {
-    //FIXME TODO
-    // for HF, tubes go into one tower
-    return false;
+    // just keep all the digis for fake
+    return true;
   }
   return false;
 }
@@ -294,6 +296,19 @@ void HCALSourceDataMonitor::finishHtml()
     htmlFile.close();
   }
 }
+//
+std::string HCALSourceDataMonitor::getBlockEventDirName(int event)
+{
+  int numEventsPerDir = 1000;
+  int blockDirNum = (event-1) / numEventsPerDir;
+  int firstEventNum = blockDirNum*numEventsPerDir + 1;
+  int lastEventNum = (blockDirNum+1)*numEventsPerDir;
+  std::string superDirName = "events";
+  superDirName+=intToString(firstEventNum);
+  superDirName+="to";
+  superDirName+=intToString(lastEventNum);
+  return superDirName;
+}
 
 // ------------ method called for each event  ------------
 void
@@ -330,8 +345,9 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   //// orbit
   //cout << "  Orbit# =" << triggerData->orbitNumber() << endl;
   //FIXME TODO: get tube name out of source position data
-  string tubeName = "H2_HB_PHI11_LAYER0_SRCTUBE"; // example tube for H2
+  //string tubeName = "H2_HB_PHI11_LAYER0_SRCTUBE"; // example tube for H2
   //string tubeName = "HFM01_ETA29_PHI55_T1A_SRCTUBE"; // example tube for HF/P5
+  string tubeName = spd->tubeNameFromCoord();
 
   TDirectory* tubeDir = (TDirectory*) rootFile_->GetDirectory(tubeName.c_str());
   if(!tubeDir)
@@ -341,15 +357,22 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   iEvent.getManyByType(hcalHistDigiCollHandleVec);
 
   int eventNum = iEvent.id().event();
-  // make subdir
+  string blockDirName = getBlockEventDirName(eventNum);
+  string blockDirPath = tubeName;
+  blockDirPath+="/";
+  blockDirPath+=blockDirName;
+  TDirectory* blockEventDir = (TDirectory*) rootFile_->GetDirectory(blockDirPath.c_str());
+  if(!blockEventDir)
+    blockEventDir = tubeDir->mkdir(blockDirName.c_str());
+    
   string directoryName = "event";
   directoryName+=intToString(eventNum);
-  string dirPath = tubeName;
+  string dirPath = blockDirPath;
   dirPath+="/";
   dirPath+=directoryName;
   TDirectory* subDir = (TDirectory*) rootFile_->GetDirectory(dirPath.c_str());
   if(!subDir)
-    subDir = tubeDir->mkdir(directoryName.c_str());
+    subDir = blockEventDir->mkdir(directoryName.c_str());
   subDir->cd();
 
   vector<Handle<HcalHistogramDigiCollection> >::iterator itr;

@@ -13,7 +13,7 @@
 //
 // Original Author:  Seth Cooper,32 4-B03,+41227675652,
 //         Created:  Tue Jul  2 10:47:48 CEST 2013
-// $Id: HCALSourceDataMonitor.cc,v 1.3 2013/07/03 08:27:08 scooper Exp $
+// $Id: HCALSourceDataMonitor.cc,v 1.4 2013/07/10 11:14:27 scooper Exp $
 //
 //
 
@@ -93,6 +93,16 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       int naiveEvtNum_;
       TFile* rootFile_;
       std::map<HcalDetId,RawHistoData> detIdToRawHistoDataMap_;
+      std::vector<double> evtNumbers_;
+      std::vector<double> orbitNumbers_;
+      std::vector<double> orbitNumberSecs_;
+      std::vector<double> indexVals_;
+      std::vector<double> messageCounterVals_;
+      std::vector<double> motorCurrentVals_;
+      std::vector<double> motorVoltageVals_;
+      std::vector<double> reelVals_;
+      std::vector<double> timeStamp1Vals_;
+      std::vector<double> triggerTimeStampVals_;
 };
 
 //
@@ -336,14 +346,34 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   // trim seconds off of usec and add to base
   trigtimeusec %= 1000000;
   trigtimebase += trigtimeusec/1000000;
+  triggerTimeStampVals_.push_back(trigtimebase);
   //char str[50];
   //sprintf(str, "  Trigger time: %s", ctime((time_t *)&trigtimebase));
   //cout << str;
   //sprintf(str, "                %d us\n", trigtimeusec);
   //cout << str;
   //cout << endl;
-  //// orbit
-  //cout << "  Orbit# =" << triggerData->orbitNumber() << endl;
+
+  // fill evt, orbit
+  evtNumbers_.push_back(naiveEvtNum_);
+  orbitNumbers_.push_back(triggerData->orbitNumber());
+  orbitNumberSecs_.push_back(88.9e-6*triggerData->orbitNumber());
+  // fill index, msg, others
+  indexVals_.push_back(spd->indexCounter());
+  messageCounterVals_.push_back(spd->messageCounter());
+  motorCurrentVals_.push_back(spd->motorCurrent());
+  motorVoltageVals_.push_back(spd->motorVoltage());
+  reelVals_.push_back(spd->reelCounter());
+  // consider what comes out as "timestamp2" in payload as usec for driver ts?
+  int timebase =0; int timeusec=0;
+  spd->getDriverTimestamp(timebase,timeusec);
+  // trim seconds off of usec and add to base
+  timeusec %= 1000000;
+  timebase += timeusec/1000000;
+  timeStamp1Vals_.push_back(timebase);
+  //char str[50];
+  //sprintf(str, "  Driver Timestamp : %s", ctime((time_t *)&timebase));
+  //s << str;
   //FIXME TODO: get tube name out of source position data
   //string tubeName = "H2_HB_PHI11_LAYER0_SRCTUBE"; // example tube for H2
   //string tubeName = "HFM01_ETA29_PHI55_T1A_SRCTUBE"; // example tube for HF/P5
@@ -504,6 +534,98 @@ HCALSourceDataMonitor::endJob()
     appendHtml(thisTube,imageNamesThisTube);
   }
   finishHtml();
+
+  TDirectory* dInfoPlotsDir = rootFile_->mkdir("driverInfoPlots");
+  dInfoPlotsDir->cd();
+  // make driver info graphs
+  TGraph* eventNumVsOrbitNumGraph = new TGraph(evtNumbers_.size(),&(*orbitNumbers_.begin()),&(*evtNumbers_.begin()));
+  eventNumVsOrbitNumGraph->Draw();
+  eventNumVsOrbitNumGraph->GetXaxis()->SetTitle("orbit");
+  eventNumVsOrbitNumGraph->GetYaxis()->SetTitle("event");
+  eventNumVsOrbitNumGraph->SetName("naiveEventNumVsOrbitNumGraph");
+  eventNumVsOrbitNumGraph->Write();
+
+  TGraph* eventNumVsOrbitNumSecsGraph = new TGraph(evtNumbers_.size(),&(*orbitNumberSecs_.begin()),&(*evtNumbers_.begin()));
+  eventNumVsOrbitNumSecsGraph->Draw();
+  eventNumVsOrbitNumSecsGraph->GetXaxis()->SetTitle("orbit [s]");
+  eventNumVsOrbitNumSecsGraph->GetYaxis()->SetTitle("event");
+  eventNumVsOrbitNumSecsGraph->SetName("naiveEventNumVsOrbitNumSecsGraph");
+  eventNumVsOrbitNumSecsGraph->Write();
+
+  TGraph* messageCounterVsOrbitNumGraph = new TGraph(messageCounterVals_.size(),&(*orbitNumberSecs_.begin()),&(*messageCounterVals_.begin()));
+  messageCounterVsOrbitNumGraph->SetName("messageCounterVsOrbitNumGraph");
+  messageCounterVsOrbitNumGraph->Draw();
+  messageCounterVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  messageCounterVsOrbitNumGraph->GetYaxis()->SetTitle("message");
+  messageCounterVsOrbitNumGraph->SetTitle("");
+  messageCounterVsOrbitNumGraph->Write();
+
+  TGraph* indexVsOrbitNumGraph = new TGraph(indexVals_.size(),&(*orbitNumberSecs_.begin()),&(*indexVals_.begin()));
+  indexVsOrbitNumGraph->SetName("indexVsOrbitNumGraph");
+  indexVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  indexVsOrbitNumGraph->GetYaxis()->SetTitle("index");
+  indexVsOrbitNumGraph->SetTitle("");
+  indexVsOrbitNumGraph->Write();
+
+  TGraph* motorCurrentVsOrbitNumGraph = new TGraph(motorCurrentVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorCurrentVals_.begin()));
+  motorCurrentVsOrbitNumGraph->SetName("motorCurrentVsOrbitNumGraph");
+  motorCurrentVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  motorCurrentVsOrbitNumGraph->GetYaxis()->SetTitle("motor current [mA]");
+  motorCurrentVsOrbitNumGraph->SetTitle("");
+  motorCurrentVsOrbitNumGraph->Write();
+
+  TGraph* motorVoltageVsOrbitNumGraph = new TGraph(motorVoltageVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorVoltageVals_.begin()));
+  motorVoltageVsOrbitNumGraph->SetName("motorVoltageVsOrbitNumGraph");
+  motorVoltageVsOrbitNumGraph->Draw();
+  motorVoltageVsOrbitNumGraph->GetXaxis()->SetTitle("orbit");
+  motorVoltageVsOrbitNumGraph->GetYaxis()->SetTitle("motor voltage [V]");
+  motorVoltageVsOrbitNumGraph->SetTitle("");
+  motorVoltageVsOrbitNumGraph->Write();
+
+  TGraph* motorCurrentVsReelPosGraph = new TGraph(motorCurrentVals_.size(),&(*reelVals_.begin()),&(*motorCurrentVals_.begin()));
+  motorCurrentVsReelPosGraph->SetName("motorCurrentVsReelPosGraph");
+  motorCurrentVsReelPosGraph->Draw();
+  motorCurrentVsReelPosGraph->GetXaxis()->SetTitle("reel [mm]");
+  motorCurrentVsReelPosGraph->GetYaxis()->SetTitle("motor current [mA]");
+  motorCurrentVsReelPosGraph->SetTitle("");
+  motorCurrentVsReelPosGraph->Write();
+
+  TGraph* motorVoltageVsReelPosGraph = new TGraph(motorVoltageVals_.size(),&(*reelVals_.begin()),&(*motorVoltageVals_.begin()));
+  motorVoltageVsReelPosGraph->SetName("motorVoltageVsReelPosGraph");
+  motorVoltageVsReelPosGraph->Draw();
+  motorVoltageVsReelPosGraph->GetXaxis()->SetTitle("reel [mm]");
+  motorVoltageVsReelPosGraph->GetYaxis()->SetTitle("motor voltage [V]");
+  motorVoltageVsReelPosGraph->SetTitle("");
+  motorVoltageVsReelPosGraph->Write();
+
+  TGraph* reelVsOrbitNumGraph = new TGraph(reelVals_.size(),&(*orbitNumberSecs_.begin()),&(*reelVals_.begin()));
+  reelVsOrbitNumGraph->SetName("reelVsOrbitNumGraph");
+  reelVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  reelVsOrbitNumGraph->GetYaxis()->SetTitle("reel [mm]");
+  reelVsOrbitNumGraph->SetTitle("");
+  reelVsOrbitNumGraph->Write();
+
+  TGraph* triggerTimestampVsOrbitNumGraph = new TGraph(triggerTimeStampVals_.size(),&(*orbitNumberSecs_.begin()),&(*triggerTimeStampVals_.begin()));
+  triggerTimestampVsOrbitNumGraph->SetName("triggerTimestampVsOrbitNumGraph");
+  triggerTimestampVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  triggerTimestampVsOrbitNumGraph->GetYaxis()->SetTitle("trigger timestamp [s]");
+  triggerTimestampVsOrbitNumGraph->SetTitle("");
+  triggerTimestampVsOrbitNumGraph->Write();
+
+  TGraph* timeStamp1VsOrbitNumGraph = new TGraph(timeStamp1Vals_.size(),&(*orbitNumberSecs_.begin()),&(*timeStamp1Vals_.begin()));
+  timeStamp1VsOrbitNumGraph->SetName("timeStamp1VsOrbitNumGraph");
+  timeStamp1VsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  timeStamp1VsOrbitNumGraph->GetYaxis()->SetTitle("timestamp1 [s]");
+  timeStamp1VsOrbitNumGraph->SetTitle("");
+  timeStamp1VsOrbitNumGraph->Write();
+
+  TGraph* triggerTimeStampVsTimeStamp1Graph = new TGraph(timeStamp1Vals_.size(),&(*timeStamp1Vals_.begin()),&(*triggerTimeStampVals_.begin()));
+  triggerTimeStampVsTimeStamp1Graph->SetName("triggerTimeStampVsTimeStamp1Graph");
+  triggerTimeStampVsTimeStamp1Graph->GetXaxis()->SetTitle("timestamp1 [s]");
+  triggerTimeStampVsTimeStamp1Graph->GetYaxis()->SetTitle("trigger timestamp [s]");
+  triggerTimeStampVsTimeStamp1Graph->SetTitle("");
+  triggerTimeStampVsTimeStamp1Graph->Write();
+
   rootFile_->Close();
 }
 

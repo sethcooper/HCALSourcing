@@ -13,7 +13,7 @@
 //
 // Original Author:  Seth Cooper,32 4-B03,+41227675652,
 //         Created:  Tue Jul  2 10:47:48 CEST 2013
-// $Id: HCALSourceDataMonitor.cc,v 1.4 2013/07/10 11:14:27 scooper Exp $
+// $Id: HCALSourceDataMonitor.cc,v 1.5 2013/07/11 12:09:37 scooper Exp $
 //
 //
 
@@ -203,6 +203,10 @@ bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName)
     // for HB, tubes go along eta (constant phi)-->keep all eta/depth for specific iphi
     if(tubePhi==iphi)
       return true;
+    // TESTING
+    //if(iphi==12)
+    //  return true;
+    // TESTING
   }
   else if(tubeName.find("HFM") != string::npos || tubeName.find("HFP") != string::npos)
   {
@@ -301,6 +305,7 @@ void HCALSourceDataMonitor::finishHtml()
   ofstream htmlFile(htmlFileName_, ios::out | ios::app);
   if(htmlFile.is_open())
   {
+    htmlFile << "<a href=\"" << rootFileName_ << "\">Download Root file</a>\n";
     htmlFile << "</body>\n";
     htmlFile << "</html>\n";
     htmlFile.close();

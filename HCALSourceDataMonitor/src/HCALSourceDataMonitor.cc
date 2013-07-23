@@ -13,7 +13,7 @@
 //
 // Original Author:  Seth Cooper,32 4-B03,+41227675652,
 //         Created:  Tue Jul  2 10:47:48 CEST 2013
-// $Id: HCALSourceDataMonitor.cc,v 1.5 2013/07/11 12:09:37 scooper Exp $
+// $Id: HCALSourceDataMonitor.cc,v 1.6 2013/07/15 17:18:31 scooper Exp $
 //
 //
 
@@ -33,11 +33,17 @@
 #include "FWCore/Framework/interface/Event.h"
 #include "FWCore/Framework/interface/MakerMacros.h"
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
+#include "DataFormats/Common/interface/Handle.h"
+#include "FWCore/Framework/interface/ESHandle.h"
 
 #include "DataFormats/HcalDigi/interface/HcalDigiCollections.h"
 #include "FWCore/ServiceRegistry/interface/Service.h"
 #include "DataFormats/HcalRecHit/interface/HcalSourcePositionData.h"
 #include "TBDataFormats/HcalTBObjects/interface/HcalTBTriggerData.h"
+#include "CondFormats/HcalObjects/interface/HcalElectronicsMap.h"
+#include "CalibFormats/HcalObjects/interface/HcalDbService.h"
+#include "CalibFormats/HcalObjects/interface/HcalDbRecord.h"
+#include "DataFormats/HcalDetId/interface/HcalElectronicsId.h"
 
 #include "TH1F.h"
 #include "TH2F.h"
@@ -52,11 +58,13 @@
 struct RawHistoData
 {
   RawHistoData() { }
-  RawHistoData(std::string setTubeName)
+  RawHistoData(std::string setTubeName, HcalDetId setDetId)
   {
     tubeName = setTubeName;
+    detId = setDetId;
   }
 
+  HcalDetId detId;
   std::string tubeName;
   std::vector<double> eventNumbers;
   std::vector<double> histoAverages;
@@ -90,9 +98,11 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       std::string htmlFileName_;
       int newRowEvery_;
       int thumbnailSize_;
+      bool outputRawHistograms_;
+      bool selectDigiBasedOnTubeName_;
       int naiveEvtNum_;
       TFile* rootFile_;
-      std::map<HcalDetId,RawHistoData> detIdToRawHistoDataMap_;
+      std::vector<RawHistoData> rawHistoDataVec_;
       std::vector<double> evtNumbers_;
       std::vector<double> orbitNumbers_;
       std::vector<double> orbitNumberSecs_;
@@ -151,9 +161,10 @@ std::string getRawHistName(int ievent, int ieta, int iphi, int depth)
   return histName;
 }
 //
-std::string getGraphName(const HcalDetId& detId)
+std::string getGraphName(const HcalDetId& detId, std::string tubeName)
 {
-  std::string histName="Ieta";
+  std::string histName=tubeName;
+  histName+="_Ieta";
   histName+=intToString(detId.ieta());
   histName+="_Iphi";
   histName+=intToString(detId.iphi());
@@ -230,7 +241,9 @@ HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
   rootFileName_ (iConfig.getUntrackedParameter<std::string>("RootFileName","hcalSourceDataMon.root")),
   htmlFileName_ (iConfig.getUntrackedParameter<std::string>("HtmlFileName","test.html")),
   newRowEvery_ (iConfig.getUntrackedParameter<int>("NewRowEvery",3)),
-  thumbnailSize_ (iConfig.getUntrackedParameter<int>("ThumbnailSize",350))
+  thumbnailSize_ (iConfig.getUntrackedParameter<int>("ThumbnailSize",350)),
+  outputRawHistograms_ (iConfig.getUntrackedParameter<bool>("OutputRawHistograms",false)),
+  selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true))
 {
   //now do what ever initialization is neededCheckForDuplicates
   naiveEvtNum_ = 0;
@@ -336,6 +349,11 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   // FIXME: the first five empty events
   if(naiveEvtNum_ < 6) return;
 
+  // get the mapping
+  edm::ESHandle<HcalDbService> pSetup;
+  iSetup.get<HcalDbRecord>().get( pSetup );
+  const HcalElectronicsMap* readoutMap = pSetup->getHcalMapping();
+
   // get source position data
   Handle<HcalSourcePositionData> hcalSourcePositionDataHandle;
   iEvent.getByType(hcalSourcePositionDataHandle);
@@ -425,37 +443,68 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     for(idigi = hcalHistDigiColl.begin(); idigi != hcalHistDigiColl.end(); idigi++)
     {
       TH1F* thisHist; // to hold individual histograms
-      // used for looking at raw hists
-      //cout << "event: " << naiveEvtNum << endl;
-      //cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
-      //cout << *idigi << endl;
       const HcalDetId detId = idigi->id();
+      int ieta = detId.ieta();
+      int iphi = detId.iphi();
+      int depth = detId.depth();
       // check if digi is associated to this source tube (based on tube name only!)
-      if(!isDigiAssociatedToSourceTube(detId,tubeName))
-        continue;
+      // otherwise, we keep all histograms...can get very large 
+      if(selectDigiBasedOnTubeName_)
+      {
+        if(!isDigiAssociatedToSourceTube(detId,tubeName))
+          continue;
+      }
 
-      // save this histo
-      int ieta = idigi->id().ieta();
-      int iphi = idigi->id().iphi();
-      int depth = idigi->id().depth();
+      // used for looking at raw hists
+      if(outputRawHistograms_)
+      {
+        HcalElectronicsId eid = readoutMap->lookup(detId);
+        cout << "event: " << eventNum << endl;
+        cout << "electronicsID: " << eid << endl;
+        cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
+        cout << *idigi << endl;
+      }
+
       string histName = getRawHistName(eventNum,ieta,iphi,depth);
       thisHist = new TH1F(histName.c_str(),histName.c_str(),32,0,32);
+      thisHist->Sumw2();
       // loop over histogram bins
-      for(int ib = 0; ib < 32; ib++)
+      int totalEnts = 0;
+      //SIC FIXME: ignore bin 31 (overflow/error) for now
+      //for(int ib = 0; ib < 32; ib++)
+      for(int ib = 0; ib < 31; ib++)
       {
         int binValSum = 0;
         // capid loop
         for(int icap = 0; icap < 4; icap++)
         { 
           binValSum+=idigi->get(icap,ib); //getting RAW histogram itself for each CAPID
+          totalEnts+=idigi->get(icap,ib);
         }
-        thisHist->Fill(ib,binValSum);
+        for(int content = 0; content < binValSum; ++content)
+          thisHist->Fill(ib);
+        //thisHist->SetBinContent(thisHist->FindBin(ib),binValSum);
+        //thisHist->SetBinError(thisHist->FindBin(ib),sqrt(binValSum));
       }  
+      //thisHist->SetEntries(totalEnts);
       thisHist->Write();
-      detIdToRawHistoDataMap_.insert(pair<HcalDetId,RawHistoData>(detId,RawHistoData(tubeName))); // only inserts if key doesn't already exist
-      detIdToRawHistoDataMap_[detId].eventNumbers.push_back(eventNum);
-      detIdToRawHistoDataMap_[detId].histoAverages.push_back(thisHist->GetMean());
-      detIdToRawHistoDataMap_[detId].histoRMSs.push_back(thisHist->GetRMS());
+      //cout << "GetMean: (before): " << thisHist->GetMean() << endl;
+      //thisHist->GetXaxis()->SetRange(1,31); // compute mean/RMS excluding last bin
+      //cout << "GetMean: (after): " << thisHist->GetMean() << endl;
+      vector<RawHistoData>::iterator histoItr = rawHistoDataVec_.begin();
+      while(rawHistoDataVec_.size() > 0 && histoItr != rawHistoDataVec_.end() && ((tubeName != histoItr->tubeName) || (detId != histoItr->detId)))
+        histoItr++;
+      RawHistoData* thisHistoData;
+      if(histoItr!=rawHistoDataVec_.end())
+        thisHistoData = &(*histoItr);
+      else
+        thisHistoData = new RawHistoData(tubeName,detId);
+        
+      thisHistoData->eventNumbers.push_back(eventNum);
+      thisHistoData->histoAverages.push_back(thisHist->GetMean());
+      thisHistoData->histoRMSs.push_back(thisHist->GetRMS());
+      if(histoItr==rawHistoDataVec_.end())
+        rawHistoDataVec_.push_back(*thisHistoData);
 
       delete thisHist;
 
@@ -481,11 +530,12 @@ HCALSourceDataMonitor::endJob()
   rootFile_->cd();
   vector<string> imageNamesThisTube; 
   set<string> tubeNameSet;
-  for(map<HcalDetId,RawHistoData>::const_iterator itr = detIdToRawHistoDataMap_.begin();
-      itr != detIdToRawHistoDataMap_.end(); ++itr)
+  for(vector<RawHistoData>::const_iterator itr = rawHistoDataVec_.begin();
+      itr != rawHistoDataVec_.end(); ++itr)
   {
-    RawHistoData data = itr->second;
-    tubeNameSet.insert(data.tubeName);
+    tubeNameSet.insert(itr->tubeName);
+    //XXX DEBUG
+    cout << "SIC DEBUG: insert tubeName = " << itr->tubeName << endl;
   }
 
   startHtml();
@@ -493,10 +543,12 @@ HCALSourceDataMonitor::endJob()
   {
     string thisTube = *tubeItr;
     imageNamesThisTube.clear();
-    for(map<HcalDetId,RawHistoData>::const_iterator itr = detIdToRawHistoDataMap_.begin();
-        itr != detIdToRawHistoDataMap_.end(); ++itr)
+    //XXX DEBUG
+    cout << "SIC DEBUG: thisTube = " << thisTube << endl;
+    for(vector<RawHistoData>::const_iterator itr = rawHistoDataVec_.begin();
+        itr != rawHistoDataVec_.end(); ++itr)
     {
-      RawHistoData data = itr->second;
+      RawHistoData data = *(itr);
       if(data.tubeName != thisTube) // only consider current tube
         continue;
 
@@ -517,7 +569,7 @@ HCALSourceDataMonitor::endJob()
       //TGraphErrors* thisGraph = new TGraphErrors(data.eventNumbers.size(),&(*data.eventNumbers.begin()),
       //    &(*data.histoAverages.begin()),&(*eventNumErrs.begin()),&(*data.histoRMSs.begin()));
       TGraph* thisGraph = new TGraph(data.eventNumbers.size(),&(*data.eventNumbers.begin()),&(*data.histoAverages.begin()));
-      string graphName = getGraphName(itr->first);
+      string graphName = getGraphName(itr->detId,itr->tubeName);
       thisGraph->SetTitle(graphName.c_str());
       thisGraph->SetName(graphName.c_str());
       thisGraph->Draw();

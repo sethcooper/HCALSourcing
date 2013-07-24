@@ -42,12 +42,12 @@ namespace hcaltb {
     map<string,double> sp_dblmap;
     map<string,string> sp_strmap;
 
-    //#ifdef DEBUG
+    #ifdef DEBUG
     cout << "#doubles = "   << sp->n_doubles << endl;;
     cout << "#strings = "   << sp->n_strings << endl;
     cout << "key_length = " << sp->key_length << endl;
     cout << "string_value_length = " << sp->string_value_length << endl;
-    //#endif
+    #endif
 
     // List of doubles:
     const char   *keyptr = &sp->start_of_data;
@@ -85,7 +85,6 @@ namespace hcaltb {
     // timestamp2
 
     // Now fill the input objects:
-    //TODO add MOTOR_VOLTAGE
     //TODO remove second timestamp
     //TODO these are all ints in the object; should be doubles?
     hspd.set(sp_dblmap["MESSAGE"], //double message_counter
@@ -100,8 +99,12 @@ namespace hcaltb {
 		 sp_dblmap["MOTOR_VOLTAGE"],//double motor_voltage
 		 -1,//double tube_id
 		 -1,//double driver_id
-     -1//double source_id
-                 );
+     -1,//double source_id
+     sp_strmap["CURRENT_TUBENAME_FROM_COORD"],
+     "", // current tubeName from SD
+     sp_strmap["LAST_COMMAND"],
+     sp_strmap["MESSAGE"]
+     );
   }
 
 }

@@ -13,7 +13,7 @@
 //
 // Original Author:  Seth Cooper,32 4-B03,+41227675652,
 //         Created:  Tue Jul  2 10:47:48 CEST 2013
-// $Id: HCALSourceDataMonitor.cc,v 1.6 2013/07/15 17:18:31 scooper Exp $
+// $Id: HCALSourceDataMonitor.cc,v 1.7 2013/07/23 08:41:57 scooper Exp $
 //
 //
 
@@ -534,8 +534,6 @@ HCALSourceDataMonitor::endJob()
       itr != rawHistoDataVec_.end(); ++itr)
   {
     tubeNameSet.insert(itr->tubeName);
-    //XXX DEBUG
-    cout << "SIC DEBUG: insert tubeName = " << itr->tubeName << endl;
   }
 
   startHtml();
@@ -543,8 +541,6 @@ HCALSourceDataMonitor::endJob()
   {
     string thisTube = *tubeItr;
     imageNamesThisTube.clear();
-    //XXX DEBUG
-    cout << "SIC DEBUG: thisTube = " << thisTube << endl;
     for(vector<RawHistoData>::const_iterator itr = rawHistoDataVec_.begin();
         itr != rawHistoDataVec_.end(); ++itr)
     {
@@ -682,6 +678,58 @@ HCALSourceDataMonitor::endJob()
   triggerTimeStampVsTimeStamp1Graph->GetYaxis()->SetTitle("trigger timestamp [s]");
   triggerTimeStampVsTimeStamp1Graph->SetTitle("");
   triggerTimeStampVsTimeStamp1Graph->Write();
+
+  // vs event number
+  TGraph* messageCounterVsEventNumGraph = new TGraph(messageCounterVals_.size(),&(*evtNumbers_.begin()),&(*messageCounterVals_.begin()));
+  messageCounterVsEventNumGraph->SetName("messageCounterVsEventNumGraph");
+  messageCounterVsEventNumGraph->Draw();
+  messageCounterVsEventNumGraph->GetXaxis()->SetTitle("event");
+  messageCounterVsEventNumGraph->GetYaxis()->SetTitle("message");
+  messageCounterVsEventNumGraph->SetTitle("");
+  messageCounterVsEventNumGraph->Write();
+
+  TGraph* indexVsEventNumGraph = new TGraph(indexVals_.size(),&(*evtNumbers_.begin()),&(*indexVals_.begin()));
+  indexVsEventNumGraph->SetName("indexVsEventNumGraph");
+  indexVsEventNumGraph->GetXaxis()->SetTitle("event");
+  indexVsEventNumGraph->GetYaxis()->SetTitle("index");
+  indexVsEventNumGraph->SetTitle("");
+  indexVsEventNumGraph->Write();
+
+  TGraph* motorCurrentVsEventNumGraph = new TGraph(motorCurrentVals_.size(),&(*evtNumbers_.begin()),&(*motorCurrentVals_.begin()));
+  motorCurrentVsEventNumGraph->SetName("motorCurrentVsEventNumGraph");
+  motorCurrentVsEventNumGraph->GetXaxis()->SetTitle("event");
+  motorCurrentVsEventNumGraph->GetYaxis()->SetTitle("motor current [mA]");
+  motorCurrentVsEventNumGraph->SetTitle("");
+  motorCurrentVsEventNumGraph->Write();
+
+  TGraph* motorVoltageVsEventNumGraph = new TGraph(motorVoltageVals_.size(),&(*evtNumbers_.begin()),&(*motorVoltageVals_.begin()));
+  motorVoltageVsEventNumGraph->SetName("motorVoltageVsEventNumGraph");
+  motorVoltageVsEventNumGraph->Draw();
+  motorVoltageVsEventNumGraph->GetXaxis()->SetTitle("orbit");
+  motorVoltageVsEventNumGraph->GetYaxis()->SetTitle("motor voltage [V]");
+  motorVoltageVsEventNumGraph->SetTitle("");
+  motorVoltageVsEventNumGraph->Write();
+
+  TGraph* reelVsEventNumGraph = new TGraph(reelVals_.size(),&(*evtNumbers_.begin()),&(*reelVals_.begin()));
+  reelVsEventNumGraph->SetName("reelVsEventNumGraph");
+  reelVsEventNumGraph->GetXaxis()->SetTitle("event");
+  reelVsEventNumGraph->GetYaxis()->SetTitle("reel [mm]");
+  reelVsEventNumGraph->SetTitle("");
+  reelVsEventNumGraph->Write();
+
+  TGraph* triggerTimestampVsEventNumGraph = new TGraph(triggerTimeStampVals_.size(),&(*evtNumbers_.begin()),&(*triggerTimeStampVals_.begin()));
+  triggerTimestampVsEventNumGraph->SetName("triggerTimestampVsEventNumGraph");
+  triggerTimestampVsEventNumGraph->GetXaxis()->SetTitle("event");
+  triggerTimestampVsEventNumGraph->GetYaxis()->SetTitle("trigger timestamp [s]");
+  triggerTimestampVsEventNumGraph->SetTitle("");
+  triggerTimestampVsEventNumGraph->Write();
+
+  TGraph* timeStamp1VsEventNumGraph = new TGraph(timeStamp1Vals_.size(),&(*evtNumbers_.begin()),&(*timeStamp1Vals_.begin()));
+  timeStamp1VsEventNumGraph->SetName("timeStamp1VsEventNumGraph");
+  timeStamp1VsEventNumGraph->GetXaxis()->SetTitle("event");
+  timeStamp1VsEventNumGraph->GetYaxis()->SetTitle("timestamp1 [s]");
+  timeStamp1VsEventNumGraph->SetTitle("");
+  timeStamp1VsEventNumGraph->Write();
 
   rootFile_->Close();
 }

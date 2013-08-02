@@ -66,10 +66,10 @@ struct RawHistoData
 
   HcalDetId detId;
   std::string tubeName;
-  std::vector<double> eventNumbers;
-  std::vector<double> reelPositions;
-  std::vector<double> histoAverages;
-  std::vector<double> histoRMSs;
+  std::vector<float> eventNumbers;
+  std::vector<float> reelPositions;
+  std::vector<float> histoAverages;
+  std::vector<float> histoRMSs;
 };
 
 class HCALSourceDataMonitor : public edm::EDAnalyzer {
@@ -104,16 +104,16 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       int naiveEvtNum_;
       TFile* rootFile_;
       std::vector<RawHistoData> rawHistoDataVec_;
-      std::vector<double> evtNumbers_;
-      std::vector<double> orbitNumbers_;
-      std::vector<double> orbitNumberSecs_;
-      std::vector<double> indexVals_;
-      std::vector<double> messageCounterVals_;
-      std::vector<double> motorCurrentVals_;
-      std::vector<double> motorVoltageVals_;
-      std::vector<double> reelVals_;
-      std::vector<double> timeStamp1Vals_;
-      std::vector<double> triggerTimeStampVals_;
+      std::vector<float> evtNumbers_;
+      std::vector<float> orbitNumbers_;
+      std::vector<float> orbitNumberSecs_;
+      std::vector<float> indexVals_;
+      std::vector<float> messageCounterVals_;
+      std::vector<float> motorCurrentVals_;
+      std::vector<float> motorVoltageVals_;
+      std::vector<float> reelVals_;
+      std::vector<float> timeStamp1Vals_;
+      std::vector<float> triggerTimeStampVals_;
 };
 
 //
@@ -544,17 +544,17 @@ HCALSourceDataMonitor::endJob()
         continue;
 
       // compute avg y value for plot scaling
-      double yavg = 0;
+      float yavg = 0;
       int count = 0;
-      for(std::vector<double>::const_iterator i = data.histoAverages.begin(); i != data.histoAverages.end(); ++i)
+      for(std::vector<float>::const_iterator i = data.histoAverages.begin(); i != data.histoAverages.end(); ++i)
       {
         yavg+=*i;
         count++;
       }
       yavg/=count;
       //// make eventNum errs
-      //vector<double> eventNumErrs;
-      //for(std::vector<double>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
+      //vector<float> eventNumErrs;
+      //for(std::vector<float>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
       //  eventNumErrs.push_back(0);
       //TGraphErrors* thisGraph = new TGraphErrors(data.eventNumbers.size(),&(*data.eventNumbers.begin()),
       //    &(*data.histoAverages.begin()),&(*eventNumErrs.begin()),&(*data.histoRMSs.begin()));

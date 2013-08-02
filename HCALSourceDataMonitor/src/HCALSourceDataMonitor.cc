@@ -67,6 +67,7 @@ struct RawHistoData
   HcalDetId detId;
   std::string tubeName;
   std::vector<double> eventNumbers;
+  std::vector<double> reelPositions;
   std::vector<double> histoAverages;
   std::vector<double> histoRMSs;
 };
@@ -352,7 +353,6 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   // get the mapping
   edm::ESHandle<HcalDbService> pSetup;
   iSetup.get<HcalDbRecord>().get( pSetup );
-  const HcalElectronicsMap* readoutMap = pSetup->getHcalMapping();
 
   // get source position data
   Handle<HcalSourcePositionData> hcalSourcePositionDataHandle;
@@ -442,7 +442,6 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     HcalHistogramDigiCollection::const_iterator idigi;
     for(idigi = hcalHistDigiColl.begin(); idigi != hcalHistDigiColl.end(); idigi++)
     {
-      TH1F* thisHist; // to hold individual histograms
       const HcalDetId detId = idigi->id();
       int ieta = detId.ieta();
       int iphi = detId.iphi();
@@ -455,18 +454,8 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
           continue;
       }
 
-      // used for looking at raw hists
-      if(outputRawHistograms_)
-      {
-        HcalElectronicsId eid = readoutMap->lookup(detId);
-        cout << "event: " << eventNum << endl;
-        cout << "electronicsID: " << eid << endl;
-        cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
-        cout << *idigi << endl;
-      }
-
       string histName = getRawHistName(eventNum,ieta,iphi,depth);
-      thisHist = new TH1F(histName.c_str(),histName.c_str(),32,0,32);
+      TH1F* thisHist = new TH1F(histName.c_str(),histName.c_str(),32,0,32);
       thisHist->Sumw2();
       // loop over histogram bins
       int totalEnts = 0;
@@ -486,11 +475,18 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
         //thisHist->SetBinContent(thisHist->FindBin(ib),binValSum);
         //thisHist->SetBinError(thisHist->FindBin(ib),sqrt(binValSum));
       }  
-      //thisHist->SetEntries(totalEnts);
-      thisHist->Write();
-      //cout << "GetMean: (before): " << thisHist->GetMean() << endl;
-      //thisHist->GetXaxis()->SetRange(1,31); // compute mean/RMS excluding last bin
-      //cout << "GetMean: (after): " << thisHist->GetMean() << endl;
+      // used for looking at and saving raw hists
+      if(outputRawHistograms_)
+      {
+        //const HcalElectronicsMap* readoutMap = pSetup->getHcalMapping();
+        //HcalElectronicsId eid = readoutMap->lookup(detId);
+        //cout << "event: " << eventNum << endl;
+        //cout << "electronicsID: " << eid << endl;
+        //cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
+        //cout << *idigi << endl;
+        thisHist->Write();
+      }
+
       vector<RawHistoData>::iterator histoItr = rawHistoDataVec_.begin();
       while(rawHistoDataVec_.size() > 0 && histoItr != rawHistoDataVec_.end() && ((tubeName != histoItr->tubeName) || (detId != histoItr->detId)))
         histoItr++;
@@ -501,14 +497,13 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
         thisHistoData = new RawHistoData(tubeName,detId);
         
       thisHistoData->eventNumbers.push_back(eventNum);
+      thisHistoData->reelPositions.push_back(spd->reelCounter());
       thisHistoData->histoAverages.push_back(thisHist->GetMean());
       thisHistoData->histoRMSs.push_back(thisHist->GetRMS());
       if(histoItr==rawHistoDataVec_.end())
         rawHistoDataVec_.push_back(*thisHistoData);
 
       delete thisHist;
-
-
     } // end loop over hist. digis
   }
 
@@ -557,11 +552,10 @@ HCALSourceDataMonitor::endJob()
         count++;
       }
       yavg/=count;
-      // make eventNum errs
-      vector<double> eventNumErrs;
-      for(std::vector<double>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
-        eventNumErrs.push_back(0);
-      // make plot
+      //// make eventNum errs
+      //vector<double> eventNumErrs;
+      //for(std::vector<double>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
+      //  eventNumErrs.push_back(0);
       //TGraphErrors* thisGraph = new TGraphErrors(data.eventNumbers.size(),&(*data.eventNumbers.begin()),
       //    &(*data.histoAverages.begin()),&(*eventNumErrs.begin()),&(*data.histoRMSs.begin()));
       TGraph* thisGraph = new TGraph(data.eventNumbers.size(),&(*data.eventNumbers.begin()),&(*data.histoAverages.begin()));
@@ -581,8 +575,23 @@ HCALSourceDataMonitor::endJob()
       thisGraph->Write();
       canvas->Print((graphName+".png").c_str());
       imageNamesThisTube.push_back(graphName+".png");
-      delete canvas;
       delete thisGraph;
+      TGraph* reelGraph = new TGraph(data.reelPositions.size(),&(*data.reelPositions.begin()),&(*data.histoAverages.begin()));
+      string reelGraphName = getGraphName(data.detId,data.tubeName);
+      reelGraphName+="reelPosition";
+      reelGraph->SetTitle(reelGraphName.c_str());
+      reelGraph->SetName(reelGraphName.c_str());
+      canvas->cd();
+      reelGraph->Draw();
+      reelGraph->GetXaxis()->SetTitle("Reel [mm]");
+      reelGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
+      reelGraph->GetYaxis()->SetRangeUser(yavg-0.4,yavg+0.4);
+      reelGraph->SetMarkerStyle(33);
+      reelGraph->SetMarkerSize(0.8);
+      reelGraph->Draw("ap");
+      reelGraph->Write();
+      delete reelGraph;
+      delete canvas;
     }
     appendHtml(thisTube,imageNamesThisTube);
   }

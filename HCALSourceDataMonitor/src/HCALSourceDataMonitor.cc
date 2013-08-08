@@ -58,10 +58,14 @@
 struct RawHistoData
 {
   RawHistoData() { }
-  RawHistoData(std::string setTubeName, HcalDetId setDetId)
+  RawHistoData(std::string setTubeName, HcalDetId setDetId, int maxEvents)
   {
     tubeName = setTubeName;
     detId = setDetId;
+    eventNumbers.reserve(maxEvents);
+    reelPositions.reserve(maxEvents);
+    histoAverages.reserve(maxEvents);
+    histoRMSs.reserve(maxEvents);
   }
 
   HcalDetId detId;
@@ -101,6 +105,7 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       int thumbnailSize_;
       bool outputRawHistograms_;
       bool selectDigiBasedOnTubeName_;
+      int maxEvents_;
       int naiveEvtNum_;
       TFile* rootFile_;
       std::vector<RawHistoData> rawHistoDataVec_;
@@ -114,6 +119,7 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       std::vector<float> reelVals_;
       std::vector<float> timeStamp1Vals_;
       std::vector<float> triggerTimeStampVals_;
+      TH1F* tempHist_;
 };
 
 //
@@ -244,13 +250,26 @@ HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
   newRowEvery_ (iConfig.getUntrackedParameter<int>("NewRowEvery",3)),
   thumbnailSize_ (iConfig.getUntrackedParameter<int>("ThumbnailSize",350)),
   outputRawHistograms_ (iConfig.getUntrackedParameter<bool>("OutputRawHistograms",false)),
-  selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true))
+  selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true)),
+  maxEvents_ (iConfig.getUntrackedParameter<int>("MaxEvents",500000))
 {
-  //now do what ever initialization is neededCheckForDuplicates
+  //now do what ever initialization is needed
   naiveEvtNum_ = 0;
   rootFile_ = new TFile(rootFileName_.c_str(),"recreate");
   rootFile_->cd();
-  
+  tempHist_ = new TH1F("tempHist","tempHist",32,0,32);
+  tempHist_->Sumw2();
+
+  evtNumbers_.reserve(maxEvents_);
+  orbitNumbers_.reserve(maxEvents_);
+  orbitNumberSecs_.reserve(maxEvents_);
+  indexVals_.reserve(maxEvents_);
+  messageCounterVals_.reserve(maxEvents_);
+  motorCurrentVals_.reserve(maxEvents_);
+  motorVoltageVals_.reserve(maxEvents_);
+  reelVals_.reserve(maxEvents_);
+  timeStamp1Vals_.reserve(maxEvents_);
+  triggerTimeStampVals_.reserve(maxEvents_);
 
 }
 
@@ -455,8 +474,8 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       }
 
       string histName = getRawHistName(eventNum,ieta,iphi,depth);
-      TH1F* thisHist = new TH1F(histName.c_str(),histName.c_str(),32,0,32);
-      thisHist->Sumw2();
+      tempHist_->Reset();
+      tempHist_->SetNameTitle(histName.c_str(),histName.c_str());
       // loop over histogram bins
       int totalEnts = 0;
       //SIC FIXME: ignore bin 31 (overflow/error) for now
@@ -471,9 +490,9 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
           totalEnts+=idigi->get(icap,ib);
         }
         for(int content = 0; content < binValSum; ++content)
-          thisHist->Fill(ib);
-        //thisHist->SetBinContent(thisHist->FindBin(ib),binValSum);
-        //thisHist->SetBinError(thisHist->FindBin(ib),sqrt(binValSum));
+          tempHist_->Fill(ib);
+        //tempHist_->SetBinContent(tempHist_->FindBin(ib),binValSum);
+        //tempHist_->SetBinError(tempHist_->FindBin(ib),sqrt(binValSum));
       }  
       // used for looking at and saving raw hists
       if(outputRawHistograms_)
@@ -484,7 +503,7 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
         //cout << "electronicsID: " << eid << endl;
         //cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
         //cout << *idigi << endl;
-        thisHist->Write();
+        tempHist_->Write();
       }
 
       vector<RawHistoData>::iterator histoItr = rawHistoDataVec_.begin();
@@ -494,16 +513,15 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       if(histoItr!=rawHistoDataVec_.end())
         thisHistoData = &(*histoItr);
       else
-        thisHistoData = new RawHistoData(tubeName,detId);
+        thisHistoData = new RawHistoData(tubeName,detId,maxEvents_);
         
       thisHistoData->eventNumbers.push_back(eventNum);
       thisHistoData->reelPositions.push_back(spd->reelCounter());
-      thisHistoData->histoAverages.push_back(thisHist->GetMean());
-      thisHistoData->histoRMSs.push_back(thisHist->GetRMS());
+      thisHistoData->histoAverages.push_back(tempHist_->GetMean());
+      thisHistoData->histoRMSs.push_back(tempHist_->GetRMS());
       if(histoItr==rawHistoDataVec_.end())
         rawHistoDataVec_.push_back(*thisHistoData);
 
-      delete thisHist;
     } // end loop over hist. digis
   }
 

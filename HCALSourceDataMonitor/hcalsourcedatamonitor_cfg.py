@@ -35,7 +35,7 @@ process.es_ascii = cms.ESSource("HcalTextCalibrations",
 process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
 
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(75000) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(10000) )
 
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use
@@ -51,11 +51,10 @@ process.source = cms.Source("HcalTBSource",
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006688.root'
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006692.root' # normal run, Jul 22
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006694.root' # run with calibMode set, Jul 22
-        'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006697.root' # first source run, layer1, Jul 22
+        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006697.root' # first source run, layer1, Jul 22
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006700.root' # second source run (calibMode), layer1, Jul 22
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006702.root' # 3rd source run (calibMode), layer10, Jul 22
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.root', # 4th source run (calibMode), all layers
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.1.root' # 4th source run (calibMode), all layers, file2
+        'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006705.root' # source run (nonCalibMode), all layers
     )
 )
 
@@ -84,19 +83,21 @@ process.hcalhistos.FEDs = cms.untracked.vint32(700)
 #)
 
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
-    RootFileName = cms.untracked.string('hcalSourceDataMon.6697.jul25.75kevts.newEmap.root'),
+    RootFileName = cms.untracked.string('test.root'),
     HtmlFileName = cms.untracked.string('test.html'),
     NewRowEvery = cms.untracked.int32(3),
     ThumbnailSize = cms.untracked.int32(350),
     OutputRawHistograms = cms.untracked.bool(False),
-    SelectDigiBasedOnTubeName = cms.untracked.bool(True)
+    SelectDigiBasedOnTubeName = cms.untracked.bool(True),
+    MaxEvents = process.maxEvents
 
 )
 
 process.load("FWCore.Modules.printContent_cfi")
 
+                     #*process.printContent
+
 process.p = cms.Path(process.tbunpack
                      *process.hcalhistos
-                     #*process.printContent
                      *process.hcalSourceDataMon
                     )

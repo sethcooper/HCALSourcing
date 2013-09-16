@@ -25,17 +25,16 @@ process.es_ascii = cms.ESSource("HcalTextCalibrations",
  input = cms.VPSet(
    cms.PSet(
      object = cms.string('ElectronicsMap'),
-     #file = cms.FileInPath('HCALSourcing/HCALFWAnalyzer/emap_H2_25oct2012.txt')
-     #file = cms.FileInPath('HCALSourcing/HCALFWAnalyzer/emap_HCAL_H2_BI_jan2013_1.txt')
-     #file = cms.FileInPath('HCALSourcing/HCALFWAnalyzer/emap_HCAL_H2_BI_modSIC2_apr2013.txt')
-     file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_H2_validatedSIC_jul2013.txt')
+     #file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_H2_validatedSIC_jul2013.txt')
+     # back to old emap, now that fiber number is fixed in unpacker
+     file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_HCAL_H2_BI_modSIC_apr2013.txt')
    )
  )
 )
 process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
 
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(10000) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(2000) )
 
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use
@@ -54,7 +53,7 @@ process.source = cms.Source("HcalTBSource",
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006697.root' # first source run, layer1, Jul 22
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006700.root' # second source run (calibMode), layer1, Jul 22
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006702.root' # 3rd source run (calibMode), layer10, Jul 22
-        'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006705.root' # source run (nonCalibMode), all layers
+        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006705.root' # source run (nonCalibMode), all layers
     )
 )
 
@@ -83,7 +82,7 @@ process.hcalhistos.FEDs = cms.untracked.vint32(700)
 #)
 
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
-    RootFileName = cms.untracked.string('test.root'),
+    RootFileName = cms.untracked.string('hcalSourceDataMon.101test.aug22.root'),
     HtmlFileName = cms.untracked.string('test.html'),
     NewRowEvery = cms.untracked.int32(3),
     ThumbnailSize = cms.untracked.int32(350),

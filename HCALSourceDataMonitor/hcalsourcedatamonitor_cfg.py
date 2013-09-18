@@ -34,7 +34,7 @@ process.es_ascii = cms.ESSource("HcalTextCalibrations",
 process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
 
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(2000) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(500000) )
 
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use
@@ -53,7 +53,10 @@ process.source = cms.Source("HcalTBSource",
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006697.root' # first source run, layer1, Jul 22
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006700.root' # second source run (calibMode), layer1, Jul 22
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006702.root' # 3rd source run (calibMode), layer10, Jul 22
+        'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.root', # 4th source run (calibMode), all layers
+        'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.1.root' # 4th source run (calibMode), all layers, file2
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006705.root' # source run (nonCalibMode), all layers
+        #'file:/afs/cern.ch/user/s/scooper/HTB_006954.root'
     )
 )
 
@@ -82,13 +85,12 @@ process.hcalhistos.FEDs = cms.untracked.vint32(700)
 #)
 
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
-    RootFileName = cms.untracked.string('hcalSourceDataMon.101test.aug22.root'),
+    RootFileName = cms.untracked.string('hcalSourceDataMon.test.6703.500kevts.sep17.root'),
     HtmlFileName = cms.untracked.string('test.html'),
     NewRowEvery = cms.untracked.int32(3),
     ThumbnailSize = cms.untracked.int32(350),
     OutputRawHistograms = cms.untracked.bool(False),
-    SelectDigiBasedOnTubeName = cms.untracked.bool(True),
-    MaxEvents = process.maxEvents
+    SelectDigiBasedOnTubeName = cms.untracked.bool(True)
 
 )
 

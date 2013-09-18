@@ -52,30 +52,11 @@
 #include "TFile.h"
 #include "TDirectory.h"
 #include "TCanvas.h"
+#include "TTree.h"
+
 //
 // class declaration
 //
-struct RawHistoData
-{
-  RawHistoData() { }
-  RawHistoData(std::string setTubeName, HcalDetId setDetId, int maxEvents)
-  {
-    tubeName = setTubeName;
-    detId = setDetId;
-    eventNumbers.reserve(maxEvents);
-    reelPositions.reserve(maxEvents);
-    histoAverages.reserve(maxEvents);
-    histoRMSs.reserve(maxEvents);
-  }
-
-  HcalDetId detId;
-  std::string tubeName;
-  std::vector<float> eventNumbers;
-  std::vector<float> reelPositions;
-  std::vector<float> histoAverages;
-  std::vector<float> histoRMSs;
-};
-
 class HCALSourceDataMonitor : public edm::EDAnalyzer {
    public:
       explicit HCALSourceDataMonitor(const edm::ParameterSet&);
@@ -94,10 +75,7 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       virtual void beginLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
       virtual void endLuminosityBlock(edm::LuminosityBlock const&, edm::EventSetup const&);
 
-      void startHtml();
-      void appendHtml(std::string tubeName, std::vector<std::string>& imageNames);
-      void finishHtml();
-      std::string getBlockEventDirName(int event);
+      bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName);
       // ----------member data ---------------------------
       std::string rootFileName_;
       std::string htmlFileName_;
@@ -108,18 +86,24 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       int maxEvents_;
       int naiveEvtNum_;
       TFile* rootFile_;
-      std::vector<RawHistoData> rawHistoDataVec_;
-      std::vector<float> evtNumbers_;
-      std::vector<float> orbitNumbers_;
-      std::vector<float> orbitNumberSecs_;
-      std::vector<float> indexVals_;
-      std::vector<float> messageCounterVals_;
-      std::vector<float> motorCurrentVals_;
-      std::vector<float> motorVoltageVals_;
-      std::vector<float> reelVals_;
-      std::vector<float> timeStamp1Vals_;
-      std::vector<float> triggerTimeStampVals_;
-      TH1F* tempHist_;
+      TTree* eventTree_;
+      // tree content
+      int treeEventNum_;
+      int treeOrbitNum_;
+      int treeIndex_;
+      int treeMsgCounter_;
+      float treeMotorCurrent_;
+      float treeMotorVoltage_;
+      int treeReelPos_;
+      float treeTimestamp1_;
+      float treeTriggerTimestamp_;
+      char treeTubeName_[100];
+      int treeNChInEvent_;
+      uint32_t treeChDenseIndex_[100]; // 100 max channels in event
+      uint16_t treeChHistBinContentCap0_[100][32];
+      uint16_t treeChHistBinContentCap1_[100][32];
+      uint16_t treeChHistBinContentCap2_[100][32];
+      uint16_t treeChHistBinContentCap3_[100][32];
 };
 
 //
@@ -130,84 +114,58 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
 // static data member definitions
 //
 
+
 //
-std::string intToString(int num)
-{
-    using namespace std;
-    ostringstream myStream;
-    myStream << num << flush;
-    return (myStream.str ());
-}
+// constructors and destructor
 //
-std::string getRawHistName(int ievent, int ieta, int iphi, int depth, int capId)
+HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
+  rootFileName_ (iConfig.getUntrackedParameter<std::string>("RootFileName","hcalSourceDataMon.root")),
+  htmlFileName_ (iConfig.getUntrackedParameter<std::string>("HtmlFileName","test.html")),
+  newRowEvery_ (iConfig.getUntrackedParameter<int>("NewRowEvery",3)),
+  thumbnailSize_ (iConfig.getUntrackedParameter<int>("ThumbnailSize",350)),
+  outputRawHistograms_ (iConfig.getUntrackedParameter<bool>("OutputRawHistograms",false)),
+  selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true)),
+  maxEvents_ (iConfig.getUntrackedParameter<int>("MaxEvents",500000))
 {
-  std::string histName = "rawHistEvent";
-  histName+=intToString(ievent);
-  histName+="_Ieta";
-  histName+=intToString(ieta);
-  histName+="_Iphi";
-  histName+=intToString(iphi);
-  histName+="_Depth";
-  histName+=intToString(depth);
-  histName+="_capID";
-  histName+=intToString(capId);
-  
-  return histName;
+  //now do what ever initialization is needed
+  naiveEvtNum_ = 0;
+  rootFile_ = new TFile(rootFileName_.c_str(),"recreate");
+  rootFile_->cd();
+  eventTree_ = new TTree("eventTree","Event data");
+  eventTree_->Branch("eventNum",&treeEventNum_);
+  eventTree_->Branch("orbitNum",&treeOrbitNum_);
+  eventTree_->Branch("index",&treeIndex_);
+  eventTree_->Branch("msgCounter",&treeMsgCounter_);
+  eventTree_->Branch("motorCurrent",&treeMotorCurrent_);
+  eventTree_->Branch("motorVoltage",&treeMotorVoltage_);
+  eventTree_->Branch("reelPos",&treeReelPos_);
+  eventTree_->Branch("timestamp1",&treeTimestamp1_);
+  eventTree_->Branch("triggerTimestamp",&treeTriggerTimestamp_);
+  eventTree_->Branch("tubeName",treeTubeName_,"tubeName/C");
+  eventTree_->Branch("nChInEvent",&treeNChInEvent_);
+  eventTree_->Branch("chDenseIndex",treeChDenseIndex_,"chDenseIndex[nChInEvent]/i");
+  eventTree_->Branch("chHistBinContentCap0",treeChHistBinContentCap0_,"chHistBinContentCap0[nChInEvent][32]/s");
+  eventTree_->Branch("chHistBinContentCap1",treeChHistBinContentCap1_,"chHistBinContentCap1[nChInEvent][32]/s");
+  eventTree_->Branch("chHistBinContentCap2",treeChHistBinContentCap2_,"chHistBinContentCap2[nChInEvent][32]/s");
+  eventTree_->Branch("chHistBinContentCap3",treeChHistBinContentCap3_,"chHistBinContentCap3[nChInEvent][32]/s");
+
 }
-std::string getRawHistName(int ievent, int ieta, int iphi, int depth)
+
+
+HCALSourceDataMonitor::~HCALSourceDataMonitor()
 {
-  std::string histName = "rawHistEvent";
-  histName+=intToString(ievent);
-  histName+="_Ieta";
-  histName+=intToString(ieta);
-  histName+="_Iphi";
-  histName+=intToString(iphi);
-  histName+="_Depth";
-  histName+=intToString(depth);
-  
-  return histName;
+ 
+   // do anything here that needs to be done at desctruction time
+   // (e.g. close files, deallocate resources etc.)
+
 }
+
+
 //
-std::string getGraphName(const HcalDetId& detId, std::string tubeName)
-{
-  std::string histName=tubeName;
-  histName+="_Ieta";
-  histName+=intToString(detId.ieta());
-  histName+="_Iphi";
-  histName+=intToString(detId.iphi());
-  histName+="_Depth";
-  histName+=intToString(detId.depth());
-  
-  return histName;
-}
+// member functions
 //
-int getEventFromHistName(std::string histName)
-{
-  int undIetaPos = histName.find("_Ieta");
-  return atoi(histName.substr(9,undIetaPos-9).c_str());
-}
 //
-int getIetaFromHistName(std::string histName)
-{
-  int undIetaPos = histName.find("_Ieta");
-  int undIphiPos = histName.find("_Iphi");
-  return atoi(histName.substr(undIetaPos+5,undIphiPos-undIetaPos-5).c_str());
-}
-//
-int getIphiFromHistName(std::string histName)
-{
-  int undIphiPos = histName.find("_Iphi");
-  int undDepthPos = histName.find("_Depth");
-  return atoi(histName.substr(undIphiPos+5,undDepthPos-undIphiPos-5).c_str());
-}
-//
-int getDepthFromHistName(std::string histName)
-{
-  int undDepthPos = histName.find("_Depth");
-  return atoi(histName.substr(undDepthPos+6,histName.length()-undDepthPos-6).c_str());
-}
-//
-bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName)
+bool HCALSourceDataMonitor::isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName)
 {
   using namespace std;
   int ieta = detId.ieta();
@@ -241,123 +199,6 @@ bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName)
   return false;
 }
 
-//
-// constructors and destructor
-//
-HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
-  rootFileName_ (iConfig.getUntrackedParameter<std::string>("RootFileName","hcalSourceDataMon.root")),
-  htmlFileName_ (iConfig.getUntrackedParameter<std::string>("HtmlFileName","test.html")),
-  newRowEvery_ (iConfig.getUntrackedParameter<int>("NewRowEvery",3)),
-  thumbnailSize_ (iConfig.getUntrackedParameter<int>("ThumbnailSize",350)),
-  outputRawHistograms_ (iConfig.getUntrackedParameter<bool>("OutputRawHistograms",false)),
-  selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true)),
-  maxEvents_ (iConfig.getUntrackedParameter<int>("MaxEvents",500000))
-{
-  //now do what ever initialization is needed
-  naiveEvtNum_ = 0;
-  rootFile_ = new TFile(rootFileName_.c_str(),"recreate");
-  rootFile_->cd();
-  tempHist_ = new TH1F("tempHist","tempHist",32,0,32);
-  tempHist_->Sumw2();
-
-  evtNumbers_.reserve(maxEvents_);
-  orbitNumbers_.reserve(maxEvents_);
-  orbitNumberSecs_.reserve(maxEvents_);
-  indexVals_.reserve(maxEvents_);
-  messageCounterVals_.reserve(maxEvents_);
-  motorCurrentVals_.reserve(maxEvents_);
-  motorVoltageVals_.reserve(maxEvents_);
-  reelVals_.reserve(maxEvents_);
-  timeStamp1Vals_.reserve(maxEvents_);
-  triggerTimeStampVals_.reserve(maxEvents_);
-
-}
-
-
-HCALSourceDataMonitor::~HCALSourceDataMonitor()
-{
- 
-   // do anything here that needs to be done at desctruction time
-   // (e.g. close files, deallocate resources etc.)
-
-}
-
-
-//
-// member functions
-//
-void HCALSourceDataMonitor::startHtml()
-{
-  using namespace std;
-  ofstream htmlFile(htmlFileName_);
-  if(htmlFile.is_open())
-  {
-    htmlFile << "<!DOCTYPE html>\n";
-    htmlFile << "<html>\n";
-    htmlFile << "<head>\n";
-    htmlFile << "<title>Histogram Data" << "</title>\n";
-    htmlFile << "</head>\n";
-    htmlFile << "<body>\n";
-    htmlFile << "<h2>Histogram Data</h2>\n";
-    htmlFile << "<hr>\n";
-    htmlFile.close();
-  }
-}
-//
-void HCALSourceDataMonitor::appendHtml(std::string tubeName, std::vector<std::string>& imageNames)
-{
-  using namespace std;
-  ofstream htmlFile(htmlFileName_, ios::out | ios::app);
-  if(htmlFile.is_open())
-  {
-    htmlFile << "<h3>Tube name: " << tubeName << "</h3>\n";
-    htmlFile << "<table>\n";
-    htmlFile << "<tr>\n";
-    int counter = 0;
-    for(std::vector<std::string>::const_iterator imageName = imageNames.begin(); imageName != imageNames.end();
-        ++imageName)
-    {
-      if(counter % newRowEvery_ == 0)
-      {
-        htmlFile << "</tr>\n";
-        htmlFile << "<tr>\n";
-      }
-      htmlFile << "<td><a href=\"" << *imageName << "\"><img width=" << thumbnailSize_ << " src=\"" << *imageName << "\"></a></td>\n";
-      ++counter;
-    }
-    htmlFile << "</tr>\n";
-    htmlFile << "</table>\n";
-    htmlFile << "<hr>\n";
-    htmlFile.close();
-  }
-}
-//
-void HCALSourceDataMonitor::finishHtml()
-{
-  using namespace std;
-  ofstream htmlFile(htmlFileName_, ios::out | ios::app);
-  if(htmlFile.is_open())
-  {
-    htmlFile << "<a href=\"" << rootFileName_ << "\">Download Root file</a>\n";
-    htmlFile << "</body>\n";
-    htmlFile << "</html>\n";
-    htmlFile.close();
-  }
-}
-//
-std::string HCALSourceDataMonitor::getBlockEventDirName(int event)
-{
-  int numEventsPerDir = 1000;
-  int blockDirNum = (event-1) / numEventsPerDir;
-  int firstEventNum = blockDirNum*numEventsPerDir + 1;
-  int lastEventNum = (blockDirNum+1)*numEventsPerDir;
-  std::string superDirName = "events";
-  superDirName+=intToString(firstEventNum);
-  superDirName+="to";
-  superDirName+=intToString(lastEventNum);
-  return superDirName;
-}
-
 // ------------ method called for each event  ------------
 void
 HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
@@ -388,31 +229,20 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   // trim seconds off of usec and add to base
   trigtimeusec %= 1000000;
   trigtimebase += trigtimeusec/1000000;
-  triggerTimeStampVals_.push_back(trigtimebase);
+  //triggerTimeStampVals_.push_back(trigtimebase);
   //char str[50];
   //sprintf(str, "  Trigger time: %s", ctime((time_t *)&trigtimebase));
   //cout << str;
   //sprintf(str, "                %d us\n", trigtimeusec);
   //cout << str;
   //cout << endl;
-
-  // fill evt, orbit
-  evtNumbers_.push_back(naiveEvtNum_);
-  orbitNumbers_.push_back(triggerData->orbitNumber());
-  orbitNumberSecs_.push_back(88.9e-6*triggerData->orbitNumber());
-  // fill index, msg, others
-  indexVals_.push_back(spd->indexCounter());
-  messageCounterVals_.push_back(spd->messageCounter());
-  motorCurrentVals_.push_back(spd->motorCurrent());
-  motorVoltageVals_.push_back(spd->motorVoltage());
-  reelVals_.push_back(spd->reelCounter());
   // consider what comes out as "timestamp2" in payload as usec for driver ts?
   int timebase =0; int timeusec=0;
   spd->getDriverTimestamp(timebase,timeusec);
   // trim seconds off of usec and add to base
   timeusec %= 1000000;
   timebase += timeusec/1000000;
-  timeStamp1Vals_.push_back(timebase);
+  //timeStamp1Vals_.push_back(timebase);
   //char str[50];
   //sprintf(str, "  Driver Timestamp : %s", ctime((time_t *)&timebase));
   //s << str;
@@ -421,32 +251,42 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   //string tubeName = "HFM01_ETA29_PHI55_T1A_SRCTUBE"; // example tube for HF/P5
   string tubeName = spd->tubeNameFromCoord();
 
-  TDirectory* tubeDir = (TDirectory*) rootFile_->GetDirectory(tubeName.c_str());
-  if(!tubeDir)
-    tubeDir = rootFile_->mkdir(tubeName.c_str());
+  int eventNum = iEvent.id().event();
+  treeEventNum_ = eventNum;
+  treeOrbitNum_ = triggerData->orbitNumber();
+  treeIndex_ = spd->indexCounter();
+  treeMsgCounter_ = spd->messageCounter();
+  treeMotorCurrent_ = spd->motorCurrent();
+  treeMotorVoltage_ = spd->motorVoltage();
+  treeReelPos_ = spd->reelCounter();
+  treeTriggerTimestamp_ = trigtimebase;
+  treeTimestamp1_ = timebase;
+  strcpy(treeTubeName_,tubeName.c_str());
+
+  //TDirectory* tubeDir = (TDirectory*) rootFile_->GetDirectory(tubeName.c_str());
+  //if(!tubeDir)
+  //  tubeDir = rootFile_->mkdir(tubeName.c_str());
+  //string blockDirName = getBlockEventDirName(eventNum);
+  //string blockDirPath = tubeName;
+  //blockDirPath+="/";
+  //blockDirPath+=blockDirName;
+  //TDirectory* blockEventDir = (TDirectory*) rootFile_->GetDirectory(blockDirPath.c_str());
+  //if(!blockEventDir)
+  //  blockEventDir = tubeDir->mkdir(blockDirName.c_str());
+  //string directoryName = "event";
+  //directoryName+=intToString(eventNum);
+  //string dirPath = blockDirPath;
+  //dirPath+="/";
+  //dirPath+=directoryName;
+  //TDirectory* subDir = (TDirectory*) rootFile_->GetDirectory(dirPath.c_str());
+  //if(!subDir)
+  //  subDir = blockEventDir->mkdir(directoryName.c_str());
+  //subDir->cd();
 
   vector<Handle<HcalHistogramDigiCollection> > hcalHistDigiCollHandleVec;
   iEvent.getManyByType(hcalHistDigiCollHandleVec);
 
-  int eventNum = iEvent.id().event();
-  string blockDirName = getBlockEventDirName(eventNum);
-  string blockDirPath = tubeName;
-  blockDirPath+="/";
-  blockDirPath+=blockDirName;
-  TDirectory* blockEventDir = (TDirectory*) rootFile_->GetDirectory(blockDirPath.c_str());
-  if(!blockEventDir)
-    blockEventDir = tubeDir->mkdir(blockDirName.c_str());
-    
-  string directoryName = "event";
-  directoryName+=intToString(eventNum);
-  string dirPath = blockDirPath;
-  dirPath+="/";
-  dirPath+=directoryName;
-  TDirectory* subDir = (TDirectory*) rootFile_->GetDirectory(dirPath.c_str());
-  if(!subDir)
-    subDir = blockEventDir->mkdir(directoryName.c_str());
-  subDir->cd();
-
+  int nChInEvent = 0;
   vector<Handle<HcalHistogramDigiCollection> >::iterator itr;
   for(itr = hcalHistDigiCollHandleVec.begin(); itr != hcalHistDigiCollHandleVec.end(); itr++)
   {
@@ -457,14 +297,10 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
     }
 
     const HcalHistogramDigiCollection& hcalHistDigiColl=*(*itr);
-
     HcalHistogramDigiCollection::const_iterator idigi;
     for(idigi = hcalHistDigiColl.begin(); idigi != hcalHistDigiColl.end(); idigi++)
     {
       const HcalDetId detId = idigi->id();
-      int ieta = detId.ieta();
-      int iphi = detId.iphi();
-      int depth = detId.depth();
       // check if digi is associated to this source tube (based on tube name only!)
       // otherwise, we keep all histograms...can get very large 
       if(selectDigiBasedOnTubeName_)
@@ -473,58 +309,36 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
           continue;
       }
 
-      string histName = getRawHistName(eventNum,ieta,iphi,depth);
-      tempHist_->Reset();
-      tempHist_->SetNameTitle(histName.c_str(),histName.c_str());
+      //string histName = getRawHistName(eventNum,ieta,iphi,depth);
+      treeChDenseIndex_[nChInEvent] = detId.denseIndex();
       // loop over histogram bins
-      int totalEnts = 0;
-      //SIC FIXME: ignore bin 31 (overflow/error) for now
-      //for(int ib = 0; ib < 32; ib++)
-      for(int ib = 0; ib < 31; ib++)
+      for(int ib = 0; ib < 32; ib++)
       {
-        int binValSum = 0;
-        // capid loop
-        for(int icap = 0; icap < 4; icap++)
-        { 
-          binValSum+=idigi->get(icap,ib); //getting RAW histogram itself for each CAPID
-          totalEnts+=idigi->get(icap,ib);
-        }
-        for(int content = 0; content < binValSum; ++content)
-          tempHist_->Fill(ib);
-        //tempHist_->SetBinContent(tempHist_->FindBin(ib),binValSum);
-        //tempHist_->SetBinError(tempHist_->FindBin(ib),sqrt(binValSum));
+        treeChHistBinContentCap0_[nChInEvent][ib] = idigi->get(0,ib); //getting RAW histogram itself for each CAPID
+        treeChHistBinContentCap1_[nChInEvent][ib] = idigi->get(1,ib); 
+        treeChHistBinContentCap2_[nChInEvent][ib] = idigi->get(2,ib); 
+        treeChHistBinContentCap3_[nChInEvent][ib] = idigi->get(3,ib); 
       }  
       // used for looking at and saving raw hists
       if(outputRawHistograms_)
       {
         //const HcalElectronicsMap* readoutMap = pSetup->getHcalMapping();
         //HcalElectronicsId eid = readoutMap->lookup(detId);
+        //int ieta = detId.ieta();
+        //int iphi = detId.iphi();
+        //int depth = detId.depth();
         //cout << "event: " << eventNum << endl;
         //cout << "electronicsID: " << eid << endl;
         //cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
         //cout << *idigi << endl;
-        tempHist_->Write();
       }
 
-      vector<RawHistoData>::iterator histoItr = rawHistoDataVec_.begin();
-      while(rawHistoDataVec_.size() > 0 && histoItr != rawHistoDataVec_.end() && ((tubeName != histoItr->tubeName) || (detId != histoItr->detId)))
-        histoItr++;
-      RawHistoData* thisHistoData;
-      if(histoItr!=rawHistoDataVec_.end())
-        thisHistoData = &(*histoItr);
-      else
-        thisHistoData = new RawHistoData(tubeName,detId,maxEvents_);
-        
-      thisHistoData->eventNumbers.push_back(eventNum);
-      thisHistoData->reelPositions.push_back(spd->reelCounter());
-      thisHistoData->histoAverages.push_back(tempHist_->GetMean());
-      thisHistoData->histoRMSs.push_back(tempHist_->GetRMS());
-      if(histoItr==rawHistoDataVec_.end())
-        rawHistoDataVec_.push_back(*thisHistoData);
-
+      nChInEvent++;
     } // end loop over hist. digis
-  }
 
+  }
+  treeNChInEvent_ = nChInEvent;
+  eventTree_->Fill();
 }
 
 
@@ -541,224 +355,225 @@ HCALSourceDataMonitor::endJob()
   using namespace std;
   // now make plots of avgVal vs. event number
   rootFile_->cd();
-  vector<string> imageNamesThisTube; 
-  set<string> tubeNameSet;
-  for(vector<RawHistoData>::const_iterator itr = rawHistoDataVec_.begin();
-      itr != rawHistoDataVec_.end(); ++itr)
-  {
-    tubeNameSet.insert(itr->tubeName);
-  }
-
-  startHtml();
-  for(set<string>::const_iterator tubeItr = tubeNameSet.begin(); tubeItr != tubeNameSet.end(); ++tubeItr)
-  {
-    string thisTube = *tubeItr;
-    imageNamesThisTube.clear();
-    for(vector<RawHistoData>::const_iterator itr = rawHistoDataVec_.begin();
-        itr != rawHistoDataVec_.end(); ++itr)
-    {
-      RawHistoData data = *(itr);
-      if(data.tubeName != thisTube) // only consider current tube
-        continue;
-
-      // compute avg y value for plot scaling
-      float yavg = 0;
-      int count = 0;
-      for(std::vector<float>::const_iterator i = data.histoAverages.begin(); i != data.histoAverages.end(); ++i)
-      {
-        yavg+=*i;
-        count++;
-      }
-      yavg/=count;
-      //// make eventNum errs
-      //vector<float> eventNumErrs;
-      //for(std::vector<float>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
-      //  eventNumErrs.push_back(0);
-      //TGraphErrors* thisGraph = new TGraphErrors(data.eventNumbers.size(),&(*data.eventNumbers.begin()),
-      //    &(*data.histoAverages.begin()),&(*eventNumErrs.begin()),&(*data.histoRMSs.begin()));
-      TGraph* thisGraph = new TGraph(data.eventNumbers.size(),&(*data.eventNumbers.begin()),&(*data.histoAverages.begin()));
-      string graphName = getGraphName(itr->detId,itr->tubeName);
-      thisGraph->SetTitle(graphName.c_str());
-      thisGraph->SetName(graphName.c_str());
-      thisGraph->Draw();
-      thisGraph->GetXaxis()->SetTitle("Event");
-      //thisGraph->GetYaxis()->SetTitle("hist. mean+/-RMS [ADC]");
-      thisGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
-      thisGraph->GetYaxis()->SetRangeUser(yavg-0.5,yavg+0.5);
-      thisGraph->SetMarkerStyle(33);
-      thisGraph->SetMarkerSize(0.8);
-      TCanvas* canvas = new TCanvas("canvas","canvas",900,600);
-      canvas->cd();
-      thisGraph->Draw("ap");
-      thisGraph->Write();
-      canvas->Print((graphName+".png").c_str());
-      imageNamesThisTube.push_back(graphName+".png");
-      delete thisGraph;
-      TGraph* reelGraph = new TGraph(data.reelPositions.size(),&(*data.reelPositions.begin()),&(*data.histoAverages.begin()));
-      string reelGraphName = getGraphName(data.detId,data.tubeName);
-      reelGraphName+="reelPosition";
-      reelGraph->SetTitle(reelGraphName.c_str());
-      reelGraph->SetName(reelGraphName.c_str());
-      canvas->cd();
-      reelGraph->Draw();
-      reelGraph->GetXaxis()->SetTitle("Reel [mm]");
-      reelGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
-      reelGraph->GetYaxis()->SetRangeUser(yavg-0.4,yavg+0.4);
-      reelGraph->SetMarkerStyle(33);
-      reelGraph->SetMarkerSize(0.8);
-      reelGraph->Draw("ap");
-      reelGraph->Write();
-      delete reelGraph;
-      delete canvas;
-    }
-    appendHtml(thisTube,imageNamesThisTube);
-  }
-  finishHtml();
-
-  TDirectory* dInfoPlotsDir = rootFile_->mkdir("driverInfoPlots");
-  dInfoPlotsDir->cd();
-  // make driver info graphs
-  TGraph* eventNumVsOrbitNumGraph = new TGraph(evtNumbers_.size(),&(*orbitNumbers_.begin()),&(*evtNumbers_.begin()));
-  eventNumVsOrbitNumGraph->Draw();
-  eventNumVsOrbitNumGraph->GetXaxis()->SetTitle("orbit");
-  eventNumVsOrbitNumGraph->GetYaxis()->SetTitle("event");
-  eventNumVsOrbitNumGraph->SetName("naiveEventNumVsOrbitNumGraph");
-  eventNumVsOrbitNumGraph->Write();
-
-  TGraph* eventNumVsOrbitNumSecsGraph = new TGraph(evtNumbers_.size(),&(*orbitNumberSecs_.begin()),&(*evtNumbers_.begin()));
-  eventNumVsOrbitNumSecsGraph->Draw();
-  eventNumVsOrbitNumSecsGraph->GetXaxis()->SetTitle("orbit [s]");
-  eventNumVsOrbitNumSecsGraph->GetYaxis()->SetTitle("event");
-  eventNumVsOrbitNumSecsGraph->SetName("naiveEventNumVsOrbitNumSecsGraph");
-  eventNumVsOrbitNumSecsGraph->Write();
-
-  TGraph* messageCounterVsOrbitNumGraph = new TGraph(messageCounterVals_.size(),&(*orbitNumberSecs_.begin()),&(*messageCounterVals_.begin()));
-  messageCounterVsOrbitNumGraph->SetName("messageCounterVsOrbitNumGraph");
-  messageCounterVsOrbitNumGraph->Draw();
-  messageCounterVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  messageCounterVsOrbitNumGraph->GetYaxis()->SetTitle("message");
-  messageCounterVsOrbitNumGraph->SetTitle("");
-  messageCounterVsOrbitNumGraph->Write();
-
-  TGraph* indexVsOrbitNumGraph = new TGraph(indexVals_.size(),&(*orbitNumberSecs_.begin()),&(*indexVals_.begin()));
-  indexVsOrbitNumGraph->SetName("indexVsOrbitNumGraph");
-  indexVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  indexVsOrbitNumGraph->GetYaxis()->SetTitle("index");
-  indexVsOrbitNumGraph->SetTitle("");
-  indexVsOrbitNumGraph->Write();
-
-  TGraph* motorCurrentVsOrbitNumGraph = new TGraph(motorCurrentVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorCurrentVals_.begin()));
-  motorCurrentVsOrbitNumGraph->SetName("motorCurrentVsOrbitNumGraph");
-  motorCurrentVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  motorCurrentVsOrbitNumGraph->GetYaxis()->SetTitle("motor current [mA]");
-  motorCurrentVsOrbitNumGraph->SetTitle("");
-  motorCurrentVsOrbitNumGraph->Write();
-
-  TGraph* motorVoltageVsOrbitNumGraph = new TGraph(motorVoltageVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorVoltageVals_.begin()));
-  motorVoltageVsOrbitNumGraph->SetName("motorVoltageVsOrbitNumGraph");
-  motorVoltageVsOrbitNumGraph->Draw();
-  motorVoltageVsOrbitNumGraph->GetXaxis()->SetTitle("orbit");
-  motorVoltageVsOrbitNumGraph->GetYaxis()->SetTitle("motor voltage [V]");
-  motorVoltageVsOrbitNumGraph->SetTitle("");
-  motorVoltageVsOrbitNumGraph->Write();
-
-  TGraph* motorCurrentVsReelPosGraph = new TGraph(motorCurrentVals_.size(),&(*reelVals_.begin()),&(*motorCurrentVals_.begin()));
-  motorCurrentVsReelPosGraph->SetName("motorCurrentVsReelPosGraph");
-  motorCurrentVsReelPosGraph->Draw();
-  motorCurrentVsReelPosGraph->GetXaxis()->SetTitle("reel [mm]");
-  motorCurrentVsReelPosGraph->GetYaxis()->SetTitle("motor current [mA]");
-  motorCurrentVsReelPosGraph->SetTitle("");
-  motorCurrentVsReelPosGraph->Write();
-
-  TGraph* motorVoltageVsReelPosGraph = new TGraph(motorVoltageVals_.size(),&(*reelVals_.begin()),&(*motorVoltageVals_.begin()));
-  motorVoltageVsReelPosGraph->SetName("motorVoltageVsReelPosGraph");
-  motorVoltageVsReelPosGraph->Draw();
-  motorVoltageVsReelPosGraph->GetXaxis()->SetTitle("reel [mm]");
-  motorVoltageVsReelPosGraph->GetYaxis()->SetTitle("motor voltage [V]");
-  motorVoltageVsReelPosGraph->SetTitle("");
-  motorVoltageVsReelPosGraph->Write();
-
-  TGraph* reelVsOrbitNumGraph = new TGraph(reelVals_.size(),&(*orbitNumberSecs_.begin()),&(*reelVals_.begin()));
-  reelVsOrbitNumGraph->SetName("reelVsOrbitNumGraph");
-  reelVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  reelVsOrbitNumGraph->GetYaxis()->SetTitle("reel [mm]");
-  reelVsOrbitNumGraph->SetTitle("");
-  reelVsOrbitNumGraph->Write();
-
-  TGraph* triggerTimestampVsOrbitNumGraph = new TGraph(triggerTimeStampVals_.size(),&(*orbitNumberSecs_.begin()),&(*triggerTimeStampVals_.begin()));
-  triggerTimestampVsOrbitNumGraph->SetName("triggerTimestampVsOrbitNumGraph");
-  triggerTimestampVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  triggerTimestampVsOrbitNumGraph->GetYaxis()->SetTitle("trigger timestamp [s]");
-  triggerTimestampVsOrbitNumGraph->SetTitle("");
-  triggerTimestampVsOrbitNumGraph->Write();
-
-  TGraph* timeStamp1VsOrbitNumGraph = new TGraph(timeStamp1Vals_.size(),&(*orbitNumberSecs_.begin()),&(*timeStamp1Vals_.begin()));
-  timeStamp1VsOrbitNumGraph->SetName("timeStamp1VsOrbitNumGraph");
-  timeStamp1VsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  timeStamp1VsOrbitNumGraph->GetYaxis()->SetTitle("timestamp1 [s]");
-  timeStamp1VsOrbitNumGraph->SetTitle("");
-  timeStamp1VsOrbitNumGraph->Write();
-
-  TGraph* triggerTimeStampVsTimeStamp1Graph = new TGraph(timeStamp1Vals_.size(),&(*timeStamp1Vals_.begin()),&(*triggerTimeStampVals_.begin()));
-  triggerTimeStampVsTimeStamp1Graph->SetName("triggerTimeStampVsTimeStamp1Graph");
-  triggerTimeStampVsTimeStamp1Graph->GetXaxis()->SetTitle("timestamp1 [s]");
-  triggerTimeStampVsTimeStamp1Graph->GetYaxis()->SetTitle("trigger timestamp [s]");
-  triggerTimeStampVsTimeStamp1Graph->SetTitle("");
-  triggerTimeStampVsTimeStamp1Graph->Write();
-
-  // vs event number
-  TGraph* messageCounterVsEventNumGraph = new TGraph(messageCounterVals_.size(),&(*evtNumbers_.begin()),&(*messageCounterVals_.begin()));
-  messageCounterVsEventNumGraph->SetName("messageCounterVsEventNumGraph");
-  messageCounterVsEventNumGraph->Draw();
-  messageCounterVsEventNumGraph->GetXaxis()->SetTitle("event");
-  messageCounterVsEventNumGraph->GetYaxis()->SetTitle("message");
-  messageCounterVsEventNumGraph->SetTitle("");
-  messageCounterVsEventNumGraph->Write();
-
-  TGraph* indexVsEventNumGraph = new TGraph(indexVals_.size(),&(*evtNumbers_.begin()),&(*indexVals_.begin()));
-  indexVsEventNumGraph->SetName("indexVsEventNumGraph");
-  indexVsEventNumGraph->GetXaxis()->SetTitle("event");
-  indexVsEventNumGraph->GetYaxis()->SetTitle("index");
-  indexVsEventNumGraph->SetTitle("");
-  indexVsEventNumGraph->Write();
-
-  TGraph* motorCurrentVsEventNumGraph = new TGraph(motorCurrentVals_.size(),&(*evtNumbers_.begin()),&(*motorCurrentVals_.begin()));
-  motorCurrentVsEventNumGraph->SetName("motorCurrentVsEventNumGraph");
-  motorCurrentVsEventNumGraph->GetXaxis()->SetTitle("event");
-  motorCurrentVsEventNumGraph->GetYaxis()->SetTitle("motor current [mA]");
-  motorCurrentVsEventNumGraph->SetTitle("");
-  motorCurrentVsEventNumGraph->Write();
-
-  TGraph* motorVoltageVsEventNumGraph = new TGraph(motorVoltageVals_.size(),&(*evtNumbers_.begin()),&(*motorVoltageVals_.begin()));
-  motorVoltageVsEventNumGraph->SetName("motorVoltageVsEventNumGraph");
-  motorVoltageVsEventNumGraph->Draw();
-  motorVoltageVsEventNumGraph->GetXaxis()->SetTitle("orbit");
-  motorVoltageVsEventNumGraph->GetYaxis()->SetTitle("motor voltage [V]");
-  motorVoltageVsEventNumGraph->SetTitle("");
-  motorVoltageVsEventNumGraph->Write();
-
-  TGraph* reelVsEventNumGraph = new TGraph(reelVals_.size(),&(*evtNumbers_.begin()),&(*reelVals_.begin()));
-  reelVsEventNumGraph->SetName("reelVsEventNumGraph");
-  reelVsEventNumGraph->GetXaxis()->SetTitle("event");
-  reelVsEventNumGraph->GetYaxis()->SetTitle("reel [mm]");
-  reelVsEventNumGraph->SetTitle("");
-  reelVsEventNumGraph->Write();
-
-  TGraph* triggerTimestampVsEventNumGraph = new TGraph(triggerTimeStampVals_.size(),&(*evtNumbers_.begin()),&(*triggerTimeStampVals_.begin()));
-  triggerTimestampVsEventNumGraph->SetName("triggerTimestampVsEventNumGraph");
-  triggerTimestampVsEventNumGraph->GetXaxis()->SetTitle("event");
-  triggerTimestampVsEventNumGraph->GetYaxis()->SetTitle("trigger timestamp [s]");
-  triggerTimestampVsEventNumGraph->SetTitle("");
-  triggerTimestampVsEventNumGraph->Write();
-
-  TGraph* timeStamp1VsEventNumGraph = new TGraph(timeStamp1Vals_.size(),&(*evtNumbers_.begin()),&(*timeStamp1Vals_.begin()));
-  timeStamp1VsEventNumGraph->SetName("timeStamp1VsEventNumGraph");
-  timeStamp1VsEventNumGraph->GetXaxis()->SetTitle("event");
-  timeStamp1VsEventNumGraph->GetYaxis()->SetTitle("timestamp1 [s]");
-  timeStamp1VsEventNumGraph->SetTitle("");
-  timeStamp1VsEventNumGraph->Write();
+  eventTree_->Write();
 
   rootFile_->Close();
+  //vector<string> imageNamesThisTube; 
+  //set<string> tubeNameSet;
+  //for(vector<RawHistoData>::const_iterator itr = rawHistoDataVec_.begin();
+  //    itr != rawHistoDataVec_.end(); ++itr)
+  //{
+  //  tubeNameSet.insert(itr->tubeName);
+  //}
+
+  //startHtml();
+  //for(set<string>::const_iterator tubeItr = tubeNameSet.begin(); tubeItr != tubeNameSet.end(); ++tubeItr)
+  //{
+  //  string thisTube = *tubeItr;
+  //  imageNamesThisTube.clear();
+  //  for(vector<RawHistoData>::const_iterator itr = rawHistoDataVec_.begin();
+  //      itr != rawHistoDataVec_.end(); ++itr)
+  //  {
+  //    RawHistoData data = *(itr);
+  //    if(data.tubeName != thisTube) // only consider current tube
+  //      continue;
+
+  //    // compute avg y value for plot scaling
+  //    float yavg = 0;
+  //    int count = 0;
+  //    for(std::vector<float>::const_iterator i = data.histoAverages.begin(); i != data.histoAverages.end(); ++i)
+  //    {
+  //      yavg+=*i;
+  //      count++;
+  //    }
+  //    yavg/=count;
+  //    //// make eventNum errs
+  //    //vector<float> eventNumErrs;
+  //    //for(std::vector<float>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
+  //    //  eventNumErrs.push_back(0);
+  //    //TGraphErrors* thisGraph = new TGraphErrors(data.eventNumbers.size(),&(*data.eventNumbers.begin()),
+  //    //    &(*data.histoAverages.begin()),&(*eventNumErrs.begin()),&(*data.histoRMSs.begin()));
+  //    TGraph* thisGraph = new TGraph(data.eventNumbers.size(),&(*data.eventNumbers.begin()),&(*data.histoAverages.begin()));
+  //    string graphName = getGraphName(itr->detId,itr->tubeName);
+  //    thisGraph->SetTitle(graphName.c_str());
+  //    thisGraph->SetName(graphName.c_str());
+  //    thisGraph->Draw();
+  //    thisGraph->GetXaxis()->SetTitle("Event");
+  //    //thisGraph->GetYaxis()->SetTitle("hist. mean+/-RMS [ADC]");
+  //    thisGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
+  //    thisGraph->GetYaxis()->SetRangeUser(yavg-0.5,yavg+0.5);
+  //    thisGraph->SetMarkerStyle(33);
+  //    thisGraph->SetMarkerSize(0.8);
+  //    TCanvas* canvas = new TCanvas("canvas","canvas",900,600);
+  //    canvas->cd();
+  //    thisGraph->Draw("ap");
+  //    thisGraph->Write();
+  //    canvas->Print((graphName+".png").c_str());
+  //    imageNamesThisTube.push_back(graphName+".png");
+  //    delete thisGraph;
+  //    TGraph* reelGraph = new TGraph(data.reelPositions.size(),&(*data.reelPositions.begin()),&(*data.histoAverages.begin()));
+  //    string reelGraphName = getGraphName(data.detId,data.tubeName);
+  //    reelGraphName+="reelPosition";
+  //    reelGraph->SetTitle(reelGraphName.c_str());
+  //    reelGraph->SetName(reelGraphName.c_str());
+  //    canvas->cd();
+  //    reelGraph->Draw();
+  //    reelGraph->GetXaxis()->SetTitle("Reel [mm]");
+  //    reelGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
+  //    reelGraph->GetYaxis()->SetRangeUser(yavg-0.4,yavg+0.4);
+  //    reelGraph->SetMarkerStyle(33);
+  //    reelGraph->SetMarkerSize(0.8);
+  //    reelGraph->Draw("ap");
+  //    reelGraph->Write();
+  //    delete reelGraph;
+  //    delete canvas;
+  //  }
+  //  appendHtml(thisTube,imageNamesThisTube);
+  //}
+  //finishHtml();
+
+  //TDirectory* dInfoPlotsDir = rootFile_->mkdir("driverInfoPlots");
+  //dInfoPlotsDir->cd();
+  //// make driver info graphs
+  //TGraph* eventNumVsOrbitNumGraph = new TGraph(evtNumbers_.size(),&(*orbitNumbers_.begin()),&(*evtNumbers_.begin()));
+  //eventNumVsOrbitNumGraph->Draw();
+  //eventNumVsOrbitNumGraph->GetXaxis()->SetTitle("orbit");
+  //eventNumVsOrbitNumGraph->GetYaxis()->SetTitle("event");
+  //eventNumVsOrbitNumGraph->SetName("naiveEventNumVsOrbitNumGraph");
+  //eventNumVsOrbitNumGraph->Write();
+
+  //TGraph* eventNumVsOrbitNumSecsGraph = new TGraph(evtNumbers_.size(),&(*orbitNumberSecs_.begin()),&(*evtNumbers_.begin()));
+  //eventNumVsOrbitNumSecsGraph->Draw();
+  //eventNumVsOrbitNumSecsGraph->GetXaxis()->SetTitle("orbit [s]");
+  //eventNumVsOrbitNumSecsGraph->GetYaxis()->SetTitle("event");
+  //eventNumVsOrbitNumSecsGraph->SetName("naiveEventNumVsOrbitNumSecsGraph");
+  //eventNumVsOrbitNumSecsGraph->Write();
+
+  //TGraph* messageCounterVsOrbitNumGraph = new TGraph(messageCounterVals_.size(),&(*orbitNumberSecs_.begin()),&(*messageCounterVals_.begin()));
+  //messageCounterVsOrbitNumGraph->SetName("messageCounterVsOrbitNumGraph");
+  //messageCounterVsOrbitNumGraph->Draw();
+  //messageCounterVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  //messageCounterVsOrbitNumGraph->GetYaxis()->SetTitle("message");
+  //messageCounterVsOrbitNumGraph->SetTitle("");
+  //messageCounterVsOrbitNumGraph->Write();
+
+  //TGraph* indexVsOrbitNumGraph = new TGraph(indexVals_.size(),&(*orbitNumberSecs_.begin()),&(*indexVals_.begin()));
+  //indexVsOrbitNumGraph->SetName("indexVsOrbitNumGraph");
+  //indexVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  //indexVsOrbitNumGraph->GetYaxis()->SetTitle("index");
+  //indexVsOrbitNumGraph->SetTitle("");
+  //indexVsOrbitNumGraph->Write();
+
+  //TGraph* motorCurrentVsOrbitNumGraph = new TGraph(motorCurrentVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorCurrentVals_.begin()));
+  //motorCurrentVsOrbitNumGraph->SetName("motorCurrentVsOrbitNumGraph");
+  //motorCurrentVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  //motorCurrentVsOrbitNumGraph->GetYaxis()->SetTitle("motor current [mA]");
+  //motorCurrentVsOrbitNumGraph->SetTitle("");
+  //motorCurrentVsOrbitNumGraph->Write();
+
+  //TGraph* motorVoltageVsOrbitNumGraph = new TGraph(motorVoltageVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorVoltageVals_.begin()));
+  //motorVoltageVsOrbitNumGraph->SetName("motorVoltageVsOrbitNumGraph");
+  //motorVoltageVsOrbitNumGraph->Draw();
+  //motorVoltageVsOrbitNumGraph->GetXaxis()->SetTitle("orbit");
+  //motorVoltageVsOrbitNumGraph->GetYaxis()->SetTitle("motor voltage [V]");
+  //motorVoltageVsOrbitNumGraph->SetTitle("");
+  //motorVoltageVsOrbitNumGraph->Write();
+
+  //TGraph* motorCurrentVsReelPosGraph = new TGraph(motorCurrentVals_.size(),&(*reelVals_.begin()),&(*motorCurrentVals_.begin()));
+  //motorCurrentVsReelPosGraph->SetName("motorCurrentVsReelPosGraph");
+  //motorCurrentVsReelPosGraph->Draw();
+  //motorCurrentVsReelPosGraph->GetXaxis()->SetTitle("reel [mm]");
+  //motorCurrentVsReelPosGraph->GetYaxis()->SetTitle("motor current [mA]");
+  //motorCurrentVsReelPosGraph->SetTitle("");
+  //motorCurrentVsReelPosGraph->Write();
+
+  //TGraph* motorVoltageVsReelPosGraph = new TGraph(motorVoltageVals_.size(),&(*reelVals_.begin()),&(*motorVoltageVals_.begin()));
+  //motorVoltageVsReelPosGraph->SetName("motorVoltageVsReelPosGraph");
+  //motorVoltageVsReelPosGraph->Draw();
+  //motorVoltageVsReelPosGraph->GetXaxis()->SetTitle("reel [mm]");
+  //motorVoltageVsReelPosGraph->GetYaxis()->SetTitle("motor voltage [V]");
+  //motorVoltageVsReelPosGraph->SetTitle("");
+  //motorVoltageVsReelPosGraph->Write();
+
+  //TGraph* reelVsOrbitNumGraph = new TGraph(reelVals_.size(),&(*orbitNumberSecs_.begin()),&(*reelVals_.begin()));
+  //reelVsOrbitNumGraph->SetName("reelVsOrbitNumGraph");
+  //reelVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  //reelVsOrbitNumGraph->GetYaxis()->SetTitle("reel [mm]");
+  //reelVsOrbitNumGraph->SetTitle("");
+  //reelVsOrbitNumGraph->Write();
+
+  //TGraph* triggerTimestampVsOrbitNumGraph = new TGraph(triggerTimeStampVals_.size(),&(*orbitNumberSecs_.begin()),&(*triggerTimeStampVals_.begin()));
+  //triggerTimestampVsOrbitNumGraph->SetName("triggerTimestampVsOrbitNumGraph");
+  //triggerTimestampVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  //triggerTimestampVsOrbitNumGraph->GetYaxis()->SetTitle("trigger timestamp [s]");
+  //triggerTimestampVsOrbitNumGraph->SetTitle("");
+  //triggerTimestampVsOrbitNumGraph->Write();
+
+  //TGraph* timeStamp1VsOrbitNumGraph = new TGraph(timeStamp1Vals_.size(),&(*orbitNumberSecs_.begin()),&(*timeStamp1Vals_.begin()));
+  //timeStamp1VsOrbitNumGraph->SetName("timeStamp1VsOrbitNumGraph");
+  //timeStamp1VsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
+  //timeStamp1VsOrbitNumGraph->GetYaxis()->SetTitle("timestamp1 [s]");
+  //timeStamp1VsOrbitNumGraph->SetTitle("");
+  //timeStamp1VsOrbitNumGraph->Write();
+
+  //TGraph* triggerTimeStampVsTimeStamp1Graph = new TGraph(timeStamp1Vals_.size(),&(*timeStamp1Vals_.begin()),&(*triggerTimeStampVals_.begin()));
+  //triggerTimeStampVsTimeStamp1Graph->SetName("triggerTimeStampVsTimeStamp1Graph");
+  //triggerTimeStampVsTimeStamp1Graph->GetXaxis()->SetTitle("timestamp1 [s]");
+  //triggerTimeStampVsTimeStamp1Graph->GetYaxis()->SetTitle("trigger timestamp [s]");
+  //triggerTimeStampVsTimeStamp1Graph->SetTitle("");
+  //triggerTimeStampVsTimeStamp1Graph->Write();
+
+  //// vs event number
+  //TGraph* messageCounterVsEventNumGraph = new TGraph(messageCounterVals_.size(),&(*evtNumbers_.begin()),&(*messageCounterVals_.begin()));
+  //messageCounterVsEventNumGraph->SetName("messageCounterVsEventNumGraph");
+  //messageCounterVsEventNumGraph->Draw();
+  //messageCounterVsEventNumGraph->GetXaxis()->SetTitle("event");
+  //messageCounterVsEventNumGraph->GetYaxis()->SetTitle("message");
+  //messageCounterVsEventNumGraph->SetTitle("");
+  //messageCounterVsEventNumGraph->Write();
+
+  //TGraph* indexVsEventNumGraph = new TGraph(indexVals_.size(),&(*evtNumbers_.begin()),&(*indexVals_.begin()));
+  //indexVsEventNumGraph->SetName("indexVsEventNumGraph");
+  //indexVsEventNumGraph->GetXaxis()->SetTitle("event");
+  //indexVsEventNumGraph->GetYaxis()->SetTitle("index");
+  //indexVsEventNumGraph->SetTitle("");
+  //indexVsEventNumGraph->Write();
+
+  //TGraph* motorCurrentVsEventNumGraph = new TGraph(motorCurrentVals_.size(),&(*evtNumbers_.begin()),&(*motorCurrentVals_.begin()));
+  //motorCurrentVsEventNumGraph->SetName("motorCurrentVsEventNumGraph");
+  //motorCurrentVsEventNumGraph->GetXaxis()->SetTitle("event");
+  //motorCurrentVsEventNumGraph->GetYaxis()->SetTitle("motor current [mA]");
+  //motorCurrentVsEventNumGraph->SetTitle("");
+  //motorCurrentVsEventNumGraph->Write();
+
+  //TGraph* motorVoltageVsEventNumGraph = new TGraph(motorVoltageVals_.size(),&(*evtNumbers_.begin()),&(*motorVoltageVals_.begin()));
+  //motorVoltageVsEventNumGraph->SetName("motorVoltageVsEventNumGraph");
+  //motorVoltageVsEventNumGraph->Draw();
+  //motorVoltageVsEventNumGraph->GetXaxis()->SetTitle("orbit");
+  //motorVoltageVsEventNumGraph->GetYaxis()->SetTitle("motor voltage [V]");
+  //motorVoltageVsEventNumGraph->SetTitle("");
+  //motorVoltageVsEventNumGraph->Write();
+
+  //TGraph* reelVsEventNumGraph = new TGraph(reelVals_.size(),&(*evtNumbers_.begin()),&(*reelVals_.begin()));
+  //reelVsEventNumGraph->SetName("reelVsEventNumGraph");
+  //reelVsEventNumGraph->GetXaxis()->SetTitle("event");
+  //reelVsEventNumGraph->GetYaxis()->SetTitle("reel [mm]");
+  //reelVsEventNumGraph->SetTitle("");
+  //reelVsEventNumGraph->Write();
+
+  //TGraph* triggerTimestampVsEventNumGraph = new TGraph(triggerTimeStampVals_.size(),&(*evtNumbers_.begin()),&(*triggerTimeStampVals_.begin()));
+  //triggerTimestampVsEventNumGraph->SetName("triggerTimestampVsEventNumGraph");
+  //triggerTimestampVsEventNumGraph->GetXaxis()->SetTitle("event");
+  //triggerTimestampVsEventNumGraph->GetYaxis()->SetTitle("trigger timestamp [s]");
+  //triggerTimestampVsEventNumGraph->SetTitle("");
+  //triggerTimestampVsEventNumGraph->Write();
+
+  //TGraph* timeStamp1VsEventNumGraph = new TGraph(timeStamp1Vals_.size(),&(*evtNumbers_.begin()),&(*timeStamp1Vals_.begin()));
+  //timeStamp1VsEventNumGraph->SetName("timeStamp1VsEventNumGraph");
+  //timeStamp1VsEventNumGraph->GetXaxis()->SetTitle("event");
+  //timeStamp1VsEventNumGraph->GetYaxis()->SetTitle("timestamp1 [s]");
+  //timeStamp1VsEventNumGraph->SetTitle("");
+  //timeStamp1VsEventNumGraph->Write();
 }
 
 // ------------ method called when starting to processes a run  ------------

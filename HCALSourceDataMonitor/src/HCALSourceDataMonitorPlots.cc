@@ -272,36 +272,6 @@ HCALSourceDataMonitorPlots::HCALSourceDataMonitorPlots(const edm::ParameterSet& 
   selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true)),
   maxEvents_ (iConfig.getUntrackedParameter<int>("MaxEvents",500000))
 {
-  //now do what ever initialization is needed
-  rootInputFile_ = new TFile(rootInputFileName_.c_str());
-  eventTree_ = (TTree*) rootInputFile_->Get("eventTree");
-  eventTree_->SetBranchAddress("eventNum",&treeEventNum_);
-  eventTree_->SetBranchAddress("orbitNum",&treeOrbitNum_);
-  eventTree_->SetBranchAddress("index",&treeIndex_);
-  eventTree_->SetBranchAddress("msgCounter",&treeMsgCounter_);
-  eventTree_->SetBranchAddress("motorCurrent",&treeMotorCurrent_);
-  eventTree_->SetBranchAddress("motorVoltage",&treeMotorVoltage_);
-  eventTree_->SetBranchAddress("reelPos",&treeReelPos_);
-  eventTree_->SetBranchAddress("timestamp1",&treeTimestamp1_);
-  eventTree_->SetBranchAddress("triggerTimestamp",&treeTriggerTimestamp_);
-  eventTree_->SetBranchAddress("tubeName",treeTubeName_);
-  eventTree_->SetBranchAddress("nChInEvent",&treeNChInEvent_);
-  eventTree_->SetBranchAddress("chDenseIndex",treeChDenseIndex_);
-  eventTree_->SetBranchAddress("chHistBinContentCap0",treeChHistBinContentCap0_);
-  eventTree_->SetBranchAddress("chHistBinContentCap1",treeChHistBinContentCap1_);
-  eventTree_->SetBranchAddress("chHistBinContentCap2",treeChHistBinContentCap2_);
-  eventTree_->SetBranchAddress("chHistBinContentCap3",treeChHistBinContentCap3_);
-
-  evtNumbers_.reserve(maxEvents_);
-  orbitNumbers_.reserve(maxEvents_);
-  orbitNumberSecs_.reserve(maxEvents_);
-  indexVals_.reserve(maxEvents_);
-  messageCounterVals_.reserve(maxEvents_);
-  motorCurrentVals_.reserve(maxEvents_);
-  motorVoltageVals_.reserve(maxEvents_);
-  reelVals_.reserve(maxEvents_);
-  timeStamp1Vals_.reserve(maxEvents_);
-  triggerTimeStampVals_.reserve(maxEvents_);
 }
 
 
@@ -407,6 +377,37 @@ void
 HCALSourceDataMonitorPlots::endJob() 
 {
   using namespace std;
+
+  // do initialization
+  rootInputFile_ = new TFile(rootInputFileName_.c_str());
+  eventTree_ = (TTree*) rootInputFile_->Get("eventTree");
+  eventTree_->SetBranchAddress("eventNum",&treeEventNum_);
+  eventTree_->SetBranchAddress("orbitNum",&treeOrbitNum_);
+  eventTree_->SetBranchAddress("index",&treeIndex_);
+  eventTree_->SetBranchAddress("msgCounter",&treeMsgCounter_);
+  eventTree_->SetBranchAddress("motorCurrent",&treeMotorCurrent_);
+  eventTree_->SetBranchAddress("motorVoltage",&treeMotorVoltage_);
+  eventTree_->SetBranchAddress("reelPos",&treeReelPos_);
+  eventTree_->SetBranchAddress("timestamp1",&treeTimestamp1_);
+  eventTree_->SetBranchAddress("triggerTimestamp",&treeTriggerTimestamp_);
+  eventTree_->SetBranchAddress("tubeName",treeTubeName_);
+  eventTree_->SetBranchAddress("nChInEvent",&treeNChInEvent_);
+  eventTree_->SetBranchAddress("chDenseIndex",treeChDenseIndex_);
+  eventTree_->SetBranchAddress("chHistBinContentCap0",treeChHistBinContentCap0_);
+  eventTree_->SetBranchAddress("chHistBinContentCap1",treeChHistBinContentCap1_);
+  eventTree_->SetBranchAddress("chHistBinContentCap2",treeChHistBinContentCap2_);
+  eventTree_->SetBranchAddress("chHistBinContentCap3",treeChHistBinContentCap3_);
+
+  evtNumbers_.reserve(maxEvents_);
+  orbitNumbers_.reserve(maxEvents_);
+  orbitNumberSecs_.reserve(maxEvents_);
+  indexVals_.reserve(maxEvents_);
+  messageCounterVals_.reserve(maxEvents_);
+  motorCurrentVals_.reserve(maxEvents_);
+  motorVoltageVals_.reserve(maxEvents_);
+  reelVals_.reserve(maxEvents_);
+  timeStamp1Vals_.reserve(maxEvents_);
+  triggerTimeStampVals_.reserve(maxEvents_);
 
   map<pair<string,HcalDetId>, RawHistoData*> rawHistoDataMap;
   set<string> tubeNameSet;

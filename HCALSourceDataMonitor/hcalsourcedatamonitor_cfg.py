@@ -34,7 +34,7 @@ process.es_ascii = cms.ESSource("HcalTextCalibrations",
 process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
 
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(500000) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(50000) )
 
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use
@@ -85,20 +85,28 @@ process.hcalhistos.FEDs = cms.untracked.vint32(700)
 #)
 
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
-    RootFileName = cms.untracked.string('hcalSourceDataMon.test.6703.500kevts.sep17.root'),
+    RootFileName = cms.untracked.string('hcalSourceDataMon.test2.6703.500kevts.sep17.root'),
+    OutputRawHistograms = cms.untracked.bool(False),
+    SelectDigiBasedOnTubeName = cms.untracked.bool(True)
+)
+
+process.hcalSourceDataMonPlots = cms.EDAnalyzer('HCALSourceDataMonitorPlots',
+    RootInputFileName = process.hcalSourceDataMon.RootFileName,
+    RootOutputFileName = cms.untracked.string('hcalSourceDataMonPlots.test2.6703.500kevts.sep17.root'),
     HtmlFileName = cms.untracked.string('test.html'),
     NewRowEvery = cms.untracked.int32(3),
     ThumbnailSize = cms.untracked.int32(350),
     OutputRawHistograms = cms.untracked.bool(False),
-    SelectDigiBasedOnTubeName = cms.untracked.bool(True)
+    SelectDigiBasedOnTubeName = cms.untracked.bool(False), # unimplemented for now
 
 )
 
 process.load("FWCore.Modules.printContent_cfi")
-
                      #*process.printContent
 
 process.p = cms.Path(process.tbunpack
                      *process.hcalhistos
                      *process.hcalSourceDataMon
                     )
+
+process.endp = cms.EndPath(process.hcalSourceDataMonPlots)

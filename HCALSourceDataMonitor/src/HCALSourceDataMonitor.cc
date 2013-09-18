@@ -78,12 +78,8 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName);
       // ----------member data ---------------------------
       std::string rootFileName_;
-      std::string htmlFileName_;
-      int newRowEvery_;
-      int thumbnailSize_;
       bool outputRawHistograms_;
       bool selectDigiBasedOnTubeName_;
-      int maxEvents_;
       int naiveEvtNum_;
       TFile* rootFile_;
       TTree* eventTree_;
@@ -120,12 +116,8 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
 //
 HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
   rootFileName_ (iConfig.getUntrackedParameter<std::string>("RootFileName","hcalSourceDataMon.root")),
-  htmlFileName_ (iConfig.getUntrackedParameter<std::string>("HtmlFileName","test.html")),
-  newRowEvery_ (iConfig.getUntrackedParameter<int>("NewRowEvery",3)),
-  thumbnailSize_ (iConfig.getUntrackedParameter<int>("ThumbnailSize",350)),
   outputRawHistograms_ (iConfig.getUntrackedParameter<bool>("OutputRawHistograms",false)),
-  selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true)),
-  maxEvents_ (iConfig.getUntrackedParameter<int>("MaxEvents",500000))
+  selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true))
 {
   //now do what ever initialization is needed
   naiveEvtNum_ = 0;

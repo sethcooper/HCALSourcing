@@ -1,6 +1,6 @@
 import FWCore.ParameterSet.Config as cms
 
-process = cms.Process("HCALFWAnalyzer")
+process = cms.Process("HCALSourceDataMonitor")
 
 #process.load("FWCore.MessageService.MessageLogger_cfi")
 process.MessageLogger = cms.Service("MessageLogger",
@@ -20,21 +20,21 @@ process.GlobalTag.globaltag = autoCond['com10'] ## == GR_R_53_V16::All in 5_3_7
 ###-- Customized particular conditions
 from CondCore.DBCommon.CondDBSetup_cfi import *
 
-#----------------------------------- replacing conditions with txt ones
-process.es_ascii = cms.ESSource("HcalTextCalibrations",
- input = cms.VPSet(
-   cms.PSet(
-     object = cms.string('ElectronicsMap'),
-     #file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_H2_validatedSIC_jul2013.txt')
-     # back to old emap, now that fiber number is fixed in unpacker
-     file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_HCAL_H2_BI_modSIC_apr2013.txt')
-   )
- )
-)
-process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
+##----------------------------------- replacing conditions with txt ones
+#process.es_ascii = cms.ESSource("HcalTextCalibrations",
+# input = cms.VPSet(
+#   cms.PSet(
+#     object = cms.string('ElectronicsMap'),
+#     #file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_H2_validatedSIC_jul2013.txt')
+#     # back to old emap, now that fiber number is fixed in unpacker
+#     file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_HCAL_H2_BI_modSIC_apr2013.txt')
+#   )
+# )
+#)
+#process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
 
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(50000) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(1000) )
 
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use
@@ -53,10 +53,13 @@ process.source = cms.Source("HcalTBSource",
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006697.root' # first source run, layer1, Jul 22
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006700.root' # second source run (calibMode), layer1, Jul 22
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006702.root' # 3rd source run (calibMode), layer10, Jul 22
-        'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.root', # 4th source run (calibMode), all layers
-        'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.1.root' # 4th source run (calibMode), all layers, file2
+        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.root', # 4th source run (calibMode), all layers
+        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.1.root' # 4th source run (calibMode), all layers, file2
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006705.root' # source run (nonCalibMode), all layers
         #'file:/afs/cern.ch/user/s/scooper/HTB_006954.root'
+        #'file:USC_214641.root'
+        'file:USC_214756.root'
+        #'file:HTB_006804.root'
     )
 )
 
@@ -78,26 +81,31 @@ process.tbunpack = cms.EDProducer("HcalTBObjectUnpacker",
 # histo unpacker
 process.load("EventFilter.HcalRawToDigi.HcalHistogramRawToDigi_cfi")
 process.hcalhistos.HcalFirstFED = cms.untracked.int32(700)
-process.hcalhistos.FEDs = cms.untracked.vint32(700)
+#process.hcalhistos.FEDs = cms.untracked.vint32(700)
+#process.hcalhistos.FEDs = cms.untracked.vint32(718,722)
+process.hcalhistos.FEDs = cms.untracked.vint32(718,719,720,721,722,723)
 
 #process.TFileService = cms.Service("TFileService", 
 #    fileName = cms.string("hcalFWAnalyzer.6096.SDMovingH2.Apr9.newEmap.root"),
 #)
 
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
-    RootFileName = cms.untracked.string('hcalSourceDataMon.test2.6703.500kevts.sep17.root'),
-    OutputRawHistograms = cms.untracked.bool(False),
-    SelectDigiBasedOnTubeName = cms.untracked.bool(True)
+    RootFileName = cms.untracked.string('hcalSourceDataMon.test1000evts.214756.oct9.root'),
+    PrintRawHistograms = cms.untracked.bool(False),
+    SelectDigiBasedOnTubeName = cms.untracked.bool(False)
 )
 
 process.hcalSourceDataMonPlots = cms.EDAnalyzer('HCALSourceDataMonitorPlots',
     RootInputFileName = process.hcalSourceDataMon.RootFileName,
-    RootOutputFileName = cms.untracked.string('hcalSourceDataMonPlots.test2.6703.500kevts.sep17.root'),
-    HtmlFileName = cms.untracked.string('test.html'),
-    NewRowEvery = cms.untracked.int32(3),
+    RootOutputFileName = cms.untracked.string('hcalSourceDataMonPlots.test1000evts.214756.oct9.root'),
+    NewRowEvery = cms.untracked.int32(4),
     ThumbnailSize = cms.untracked.int32(350),
-    OutputRawHistograms = cms.untracked.bool(False),
+    OutputRawHistograms = cms.untracked.bool(True),
     SelectDigiBasedOnTubeName = cms.untracked.bool(False), # unimplemented for now
+    #MaxEvents = cms.untracked.int32(100)
+    #HtmlFileName
+    #HtmlDirName
+    #PlotsDirName
 
 )
 

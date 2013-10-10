@@ -54,6 +54,7 @@
 #include "TCanvas.h"
 #include "TTree.h"
 
+#define MAXCHPEREVENT 500
 //
 // class declaration
 //
@@ -78,7 +79,7 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName);
       // ----------member data ---------------------------
       std::string rootFileName_;
-      bool outputRawHistograms_;
+      bool printRawHistograms_;
       bool selectDigiBasedOnTubeName_;
       int naiveEvtNum_;
       TFile* rootFile_;
@@ -95,11 +96,11 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       float treeTriggerTimestamp_;
       char treeTubeName_[100];
       int treeNChInEvent_;
-      uint32_t treeChDenseIndex_[100]; // 100 max channels in event
-      uint16_t treeChHistBinContentCap0_[100][32];
-      uint16_t treeChHistBinContentCap1_[100][32];
-      uint16_t treeChHistBinContentCap2_[100][32];
-      uint16_t treeChHistBinContentCap3_[100][32];
+      uint32_t treeChDenseIndex_[MAXCHPEREVENT];
+      uint16_t treeChHistBinContentCap0_[MAXCHPEREVENT][32];
+      uint16_t treeChHistBinContentCap1_[MAXCHPEREVENT][32];
+      uint16_t treeChHistBinContentCap2_[MAXCHPEREVENT][32];
+      uint16_t treeChHistBinContentCap3_[MAXCHPEREVENT][32];
 };
 
 //
@@ -116,7 +117,7 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
 //
 HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
   rootFileName_ (iConfig.getUntrackedParameter<std::string>("RootFileName","hcalSourceDataMon.root")),
-  outputRawHistograms_ (iConfig.getUntrackedParameter<bool>("OutputRawHistograms",false)),
+  printRawHistograms_ (iConfig.getUntrackedParameter<bool>("PrintRawHistograms",false)),
   selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true))
 {
   //now do what ever initialization is needed
@@ -255,26 +256,6 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   treeTimestamp1_ = timebase;
   strcpy(treeTubeName_,tubeName.c_str());
 
-  //TDirectory* tubeDir = (TDirectory*) rootFile_->GetDirectory(tubeName.c_str());
-  //if(!tubeDir)
-  //  tubeDir = rootFile_->mkdir(tubeName.c_str());
-  //string blockDirName = getBlockEventDirName(eventNum);
-  //string blockDirPath = tubeName;
-  //blockDirPath+="/";
-  //blockDirPath+=blockDirName;
-  //TDirectory* blockEventDir = (TDirectory*) rootFile_->GetDirectory(blockDirPath.c_str());
-  //if(!blockEventDir)
-  //  blockEventDir = tubeDir->mkdir(blockDirName.c_str());
-  //string directoryName = "event";
-  //directoryName+=intToString(eventNum);
-  //string dirPath = blockDirPath;
-  //dirPath+="/";
-  //dirPath+=directoryName;
-  //TDirectory* subDir = (TDirectory*) rootFile_->GetDirectory(dirPath.c_str());
-  //if(!subDir)
-  //  subDir = blockEventDir->mkdir(directoryName.c_str());
-  //subDir->cd();
-
   vector<Handle<HcalHistogramDigiCollection> > hcalHistDigiCollHandleVec;
   iEvent.getManyByType(hcalHistDigiCollHandleVec);
 
@@ -312,22 +293,27 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
         treeChHistBinContentCap3_[nChInEvent][ib] = idigi->get(3,ib); 
       }  
       // used for looking at and saving raw hists
-      if(outputRawHistograms_)
+      if(printRawHistograms_)
       {
-        //const HcalElectronicsMap* readoutMap = pSetup->getHcalMapping();
-        //HcalElectronicsId eid = readoutMap->lookup(detId);
-        //int ieta = detId.ieta();
-        //int iphi = detId.iphi();
-        //int depth = detId.depth();
-        //cout << "event: " << eventNum << endl;
-        //cout << "electronicsID: " << eid << endl;
-        //cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
-        //cout << *idigi << endl;
+        const HcalElectronicsMap* readoutMap = pSetup->getHcalMapping();
+        HcalElectronicsId eid = readoutMap->lookup(detId);
+        int ieta = detId.ieta();
+        int iphi = detId.iphi();
+        int depth = detId.depth();
+        cout << "event: " << eventNum << endl;
+        cout << "electronicsID: " << eid << endl;
+        cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
+        cout << *idigi << endl;
       }
 
       nChInEvent++;
     } // end loop over hist. digis
 
+  }
+  if(nChInEvent > MAXCHPEREVENT)
+  {
+    cout << "ERROR: nChInEvent " << nChInEvent << " > MAXCHPEREVENT=" << MAXCHPEREVENT << "; don't fill tree." << endl;
+    return;
   }
   treeNChInEvent_ = nChInEvent;
   eventTree_->Fill();
@@ -344,228 +330,9 @@ HCALSourceDataMonitor::beginJob()
 void 
 HCALSourceDataMonitor::endJob() 
 {
-  using namespace std;
-  // now make plots of avgVal vs. event number
   rootFile_->cd();
   eventTree_->Write();
-
   rootFile_->Close();
-  //vector<string> imageNamesThisTube; 
-  //set<string> tubeNameSet;
-  //for(vector<RawHistoData>::const_iterator itr = rawHistoDataVec_.begin();
-  //    itr != rawHistoDataVec_.end(); ++itr)
-  //{
-  //  tubeNameSet.insert(itr->tubeName);
-  //}
-
-  //startHtml();
-  //for(set<string>::const_iterator tubeItr = tubeNameSet.begin(); tubeItr != tubeNameSet.end(); ++tubeItr)
-  //{
-  //  string thisTube = *tubeItr;
-  //  imageNamesThisTube.clear();
-  //  for(vector<RawHistoData>::const_iterator itr = rawHistoDataVec_.begin();
-  //      itr != rawHistoDataVec_.end(); ++itr)
-  //  {
-  //    RawHistoData data = *(itr);
-  //    if(data.tubeName != thisTube) // only consider current tube
-  //      continue;
-
-  //    // compute avg y value for plot scaling
-  //    float yavg = 0;
-  //    int count = 0;
-  //    for(std::vector<float>::const_iterator i = data.histoAverages.begin(); i != data.histoAverages.end(); ++i)
-  //    {
-  //      yavg+=*i;
-  //      count++;
-  //    }
-  //    yavg/=count;
-  //    //// make eventNum errs
-  //    //vector<float> eventNumErrs;
-  //    //for(std::vector<float>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
-  //    //  eventNumErrs.push_back(0);
-  //    //TGraphErrors* thisGraph = new TGraphErrors(data.eventNumbers.size(),&(*data.eventNumbers.begin()),
-  //    //    &(*data.histoAverages.begin()),&(*eventNumErrs.begin()),&(*data.histoRMSs.begin()));
-  //    TGraph* thisGraph = new TGraph(data.eventNumbers.size(),&(*data.eventNumbers.begin()),&(*data.histoAverages.begin()));
-  //    string graphName = getGraphName(itr->detId,itr->tubeName);
-  //    thisGraph->SetTitle(graphName.c_str());
-  //    thisGraph->SetName(graphName.c_str());
-  //    thisGraph->Draw();
-  //    thisGraph->GetXaxis()->SetTitle("Event");
-  //    //thisGraph->GetYaxis()->SetTitle("hist. mean+/-RMS [ADC]");
-  //    thisGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
-  //    thisGraph->GetYaxis()->SetRangeUser(yavg-0.5,yavg+0.5);
-  //    thisGraph->SetMarkerStyle(33);
-  //    thisGraph->SetMarkerSize(0.8);
-  //    TCanvas* canvas = new TCanvas("canvas","canvas",900,600);
-  //    canvas->cd();
-  //    thisGraph->Draw("ap");
-  //    thisGraph->Write();
-  //    canvas->Print((graphName+".png").c_str());
-  //    imageNamesThisTube.push_back(graphName+".png");
-  //    delete thisGraph;
-  //    TGraph* reelGraph = new TGraph(data.reelPositions.size(),&(*data.reelPositions.begin()),&(*data.histoAverages.begin()));
-  //    string reelGraphName = getGraphName(data.detId,data.tubeName);
-  //    reelGraphName+="reelPosition";
-  //    reelGraph->SetTitle(reelGraphName.c_str());
-  //    reelGraph->SetName(reelGraphName.c_str());
-  //    canvas->cd();
-  //    reelGraph->Draw();
-  //    reelGraph->GetXaxis()->SetTitle("Reel [mm]");
-  //    reelGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
-  //    reelGraph->GetYaxis()->SetRangeUser(yavg-0.4,yavg+0.4);
-  //    reelGraph->SetMarkerStyle(33);
-  //    reelGraph->SetMarkerSize(0.8);
-  //    reelGraph->Draw("ap");
-  //    reelGraph->Write();
-  //    delete reelGraph;
-  //    delete canvas;
-  //  }
-  //  appendHtml(thisTube,imageNamesThisTube);
-  //}
-  //finishHtml();
-
-  //TDirectory* dInfoPlotsDir = rootFile_->mkdir("driverInfoPlots");
-  //dInfoPlotsDir->cd();
-  //// make driver info graphs
-  //TGraph* eventNumVsOrbitNumGraph = new TGraph(evtNumbers_.size(),&(*orbitNumbers_.begin()),&(*evtNumbers_.begin()));
-  //eventNumVsOrbitNumGraph->Draw();
-  //eventNumVsOrbitNumGraph->GetXaxis()->SetTitle("orbit");
-  //eventNumVsOrbitNumGraph->GetYaxis()->SetTitle("event");
-  //eventNumVsOrbitNumGraph->SetName("naiveEventNumVsOrbitNumGraph");
-  //eventNumVsOrbitNumGraph->Write();
-
-  //TGraph* eventNumVsOrbitNumSecsGraph = new TGraph(evtNumbers_.size(),&(*orbitNumberSecs_.begin()),&(*evtNumbers_.begin()));
-  //eventNumVsOrbitNumSecsGraph->Draw();
-  //eventNumVsOrbitNumSecsGraph->GetXaxis()->SetTitle("orbit [s]");
-  //eventNumVsOrbitNumSecsGraph->GetYaxis()->SetTitle("event");
-  //eventNumVsOrbitNumSecsGraph->SetName("naiveEventNumVsOrbitNumSecsGraph");
-  //eventNumVsOrbitNumSecsGraph->Write();
-
-  //TGraph* messageCounterVsOrbitNumGraph = new TGraph(messageCounterVals_.size(),&(*orbitNumberSecs_.begin()),&(*messageCounterVals_.begin()));
-  //messageCounterVsOrbitNumGraph->SetName("messageCounterVsOrbitNumGraph");
-  //messageCounterVsOrbitNumGraph->Draw();
-  //messageCounterVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  //messageCounterVsOrbitNumGraph->GetYaxis()->SetTitle("message");
-  //messageCounterVsOrbitNumGraph->SetTitle("");
-  //messageCounterVsOrbitNumGraph->Write();
-
-  //TGraph* indexVsOrbitNumGraph = new TGraph(indexVals_.size(),&(*orbitNumberSecs_.begin()),&(*indexVals_.begin()));
-  //indexVsOrbitNumGraph->SetName("indexVsOrbitNumGraph");
-  //indexVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  //indexVsOrbitNumGraph->GetYaxis()->SetTitle("index");
-  //indexVsOrbitNumGraph->SetTitle("");
-  //indexVsOrbitNumGraph->Write();
-
-  //TGraph* motorCurrentVsOrbitNumGraph = new TGraph(motorCurrentVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorCurrentVals_.begin()));
-  //motorCurrentVsOrbitNumGraph->SetName("motorCurrentVsOrbitNumGraph");
-  //motorCurrentVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  //motorCurrentVsOrbitNumGraph->GetYaxis()->SetTitle("motor current [mA]");
-  //motorCurrentVsOrbitNumGraph->SetTitle("");
-  //motorCurrentVsOrbitNumGraph->Write();
-
-  //TGraph* motorVoltageVsOrbitNumGraph = new TGraph(motorVoltageVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorVoltageVals_.begin()));
-  //motorVoltageVsOrbitNumGraph->SetName("motorVoltageVsOrbitNumGraph");
-  //motorVoltageVsOrbitNumGraph->Draw();
-  //motorVoltageVsOrbitNumGraph->GetXaxis()->SetTitle("orbit");
-  //motorVoltageVsOrbitNumGraph->GetYaxis()->SetTitle("motor voltage [V]");
-  //motorVoltageVsOrbitNumGraph->SetTitle("");
-  //motorVoltageVsOrbitNumGraph->Write();
-
-  //TGraph* motorCurrentVsReelPosGraph = new TGraph(motorCurrentVals_.size(),&(*reelVals_.begin()),&(*motorCurrentVals_.begin()));
-  //motorCurrentVsReelPosGraph->SetName("motorCurrentVsReelPosGraph");
-  //motorCurrentVsReelPosGraph->Draw();
-  //motorCurrentVsReelPosGraph->GetXaxis()->SetTitle("reel [mm]");
-  //motorCurrentVsReelPosGraph->GetYaxis()->SetTitle("motor current [mA]");
-  //motorCurrentVsReelPosGraph->SetTitle("");
-  //motorCurrentVsReelPosGraph->Write();
-
-  //TGraph* motorVoltageVsReelPosGraph = new TGraph(motorVoltageVals_.size(),&(*reelVals_.begin()),&(*motorVoltageVals_.begin()));
-  //motorVoltageVsReelPosGraph->SetName("motorVoltageVsReelPosGraph");
-  //motorVoltageVsReelPosGraph->Draw();
-  //motorVoltageVsReelPosGraph->GetXaxis()->SetTitle("reel [mm]");
-  //motorVoltageVsReelPosGraph->GetYaxis()->SetTitle("motor voltage [V]");
-  //motorVoltageVsReelPosGraph->SetTitle("");
-  //motorVoltageVsReelPosGraph->Write();
-
-  //TGraph* reelVsOrbitNumGraph = new TGraph(reelVals_.size(),&(*orbitNumberSecs_.begin()),&(*reelVals_.begin()));
-  //reelVsOrbitNumGraph->SetName("reelVsOrbitNumGraph");
-  //reelVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  //reelVsOrbitNumGraph->GetYaxis()->SetTitle("reel [mm]");
-  //reelVsOrbitNumGraph->SetTitle("");
-  //reelVsOrbitNumGraph->Write();
-
-  //TGraph* triggerTimestampVsOrbitNumGraph = new TGraph(triggerTimeStampVals_.size(),&(*orbitNumberSecs_.begin()),&(*triggerTimeStampVals_.begin()));
-  //triggerTimestampVsOrbitNumGraph->SetName("triggerTimestampVsOrbitNumGraph");
-  //triggerTimestampVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  //triggerTimestampVsOrbitNumGraph->GetYaxis()->SetTitle("trigger timestamp [s]");
-  //triggerTimestampVsOrbitNumGraph->SetTitle("");
-  //triggerTimestampVsOrbitNumGraph->Write();
-
-  //TGraph* timeStamp1VsOrbitNumGraph = new TGraph(timeStamp1Vals_.size(),&(*orbitNumberSecs_.begin()),&(*timeStamp1Vals_.begin()));
-  //timeStamp1VsOrbitNumGraph->SetName("timeStamp1VsOrbitNumGraph");
-  //timeStamp1VsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  //timeStamp1VsOrbitNumGraph->GetYaxis()->SetTitle("timestamp1 [s]");
-  //timeStamp1VsOrbitNumGraph->SetTitle("");
-  //timeStamp1VsOrbitNumGraph->Write();
-
-  //TGraph* triggerTimeStampVsTimeStamp1Graph = new TGraph(timeStamp1Vals_.size(),&(*timeStamp1Vals_.begin()),&(*triggerTimeStampVals_.begin()));
-  //triggerTimeStampVsTimeStamp1Graph->SetName("triggerTimeStampVsTimeStamp1Graph");
-  //triggerTimeStampVsTimeStamp1Graph->GetXaxis()->SetTitle("timestamp1 [s]");
-  //triggerTimeStampVsTimeStamp1Graph->GetYaxis()->SetTitle("trigger timestamp [s]");
-  //triggerTimeStampVsTimeStamp1Graph->SetTitle("");
-  //triggerTimeStampVsTimeStamp1Graph->Write();
-
-  //// vs event number
-  //TGraph* messageCounterVsEventNumGraph = new TGraph(messageCounterVals_.size(),&(*evtNumbers_.begin()),&(*messageCounterVals_.begin()));
-  //messageCounterVsEventNumGraph->SetName("messageCounterVsEventNumGraph");
-  //messageCounterVsEventNumGraph->Draw();
-  //messageCounterVsEventNumGraph->GetXaxis()->SetTitle("event");
-  //messageCounterVsEventNumGraph->GetYaxis()->SetTitle("message");
-  //messageCounterVsEventNumGraph->SetTitle("");
-  //messageCounterVsEventNumGraph->Write();
-
-  //TGraph* indexVsEventNumGraph = new TGraph(indexVals_.size(),&(*evtNumbers_.begin()),&(*indexVals_.begin()));
-  //indexVsEventNumGraph->SetName("indexVsEventNumGraph");
-  //indexVsEventNumGraph->GetXaxis()->SetTitle("event");
-  //indexVsEventNumGraph->GetYaxis()->SetTitle("index");
-  //indexVsEventNumGraph->SetTitle("");
-  //indexVsEventNumGraph->Write();
-
-  //TGraph* motorCurrentVsEventNumGraph = new TGraph(motorCurrentVals_.size(),&(*evtNumbers_.begin()),&(*motorCurrentVals_.begin()));
-  //motorCurrentVsEventNumGraph->SetName("motorCurrentVsEventNumGraph");
-  //motorCurrentVsEventNumGraph->GetXaxis()->SetTitle("event");
-  //motorCurrentVsEventNumGraph->GetYaxis()->SetTitle("motor current [mA]");
-  //motorCurrentVsEventNumGraph->SetTitle("");
-  //motorCurrentVsEventNumGraph->Write();
-
-  //TGraph* motorVoltageVsEventNumGraph = new TGraph(motorVoltageVals_.size(),&(*evtNumbers_.begin()),&(*motorVoltageVals_.begin()));
-  //motorVoltageVsEventNumGraph->SetName("motorVoltageVsEventNumGraph");
-  //motorVoltageVsEventNumGraph->Draw();
-  //motorVoltageVsEventNumGraph->GetXaxis()->SetTitle("orbit");
-  //motorVoltageVsEventNumGraph->GetYaxis()->SetTitle("motor voltage [V]");
-  //motorVoltageVsEventNumGraph->SetTitle("");
-  //motorVoltageVsEventNumGraph->Write();
-
-  //TGraph* reelVsEventNumGraph = new TGraph(reelVals_.size(),&(*evtNumbers_.begin()),&(*reelVals_.begin()));
-  //reelVsEventNumGraph->SetName("reelVsEventNumGraph");
-  //reelVsEventNumGraph->GetXaxis()->SetTitle("event");
-  //reelVsEventNumGraph->GetYaxis()->SetTitle("reel [mm]");
-  //reelVsEventNumGraph->SetTitle("");
-  //reelVsEventNumGraph->Write();
-
-  //TGraph* triggerTimestampVsEventNumGraph = new TGraph(triggerTimeStampVals_.size(),&(*evtNumbers_.begin()),&(*triggerTimeStampVals_.begin()));
-  //triggerTimestampVsEventNumGraph->SetName("triggerTimestampVsEventNumGraph");
-  //triggerTimestampVsEventNumGraph->GetXaxis()->SetTitle("event");
-  //triggerTimestampVsEventNumGraph->GetYaxis()->SetTitle("trigger timestamp [s]");
-  //triggerTimestampVsEventNumGraph->SetTitle("");
-  //triggerTimestampVsEventNumGraph->Write();
-
-  //TGraph* timeStamp1VsEventNumGraph = new TGraph(timeStamp1Vals_.size(),&(*evtNumbers_.begin()),&(*timeStamp1Vals_.begin()));
-  //timeStamp1VsEventNumGraph->SetName("timeStamp1VsEventNumGraph");
-  //timeStamp1VsEventNumGraph->GetXaxis()->SetTitle("event");
-  //timeStamp1VsEventNumGraph->GetYaxis()->SetTitle("timestamp1 [s]");
-  //timeStamp1VsEventNumGraph->SetTitle("");
-  //timeStamp1VsEventNumGraph->Write();
 }
 
 // ------------ method called when starting to processes a run  ------------

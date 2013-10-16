@@ -104,6 +104,7 @@ class HCALSourceDataMonitorPlots : public edm::EDAnalyzer {
       void finishHtml(std::set<std::string> tubeNameSet);
       std::string getBlockEventDirName(int event);
       // ----------member data ---------------------------
+      edm::ESHandle<HcalDbService> pSetup;
       std::string rootInputFileName_;
       std::string rootOutputFileName_;
       std::string plotsDirName_;
@@ -137,9 +138,11 @@ class HCALSourceDataMonitorPlots : public edm::EDAnalyzer {
       int treeReelPos_;
       float treeTimestamp1_;
       float treeTriggerTimestamp_;
-      int treeNChInEvent_;
       char treeTubeName_[100];
+      int treeNChInEvent_;
       uint32_t treeChDenseIndex_[MAXCHPEREVENT];
+      float treeChHistMean_[MAXCHPEREVENT];
+      float treeChHistRMS_[MAXCHPEREVENT];
       uint16_t treeChHistBinContentCap0_[MAXCHPEREVENT][32];
       uint16_t treeChHistBinContentCap1_[MAXCHPEREVENT][32];
       uint16_t treeChHistBinContentCap2_[MAXCHPEREVENT][32];
@@ -396,6 +399,8 @@ std::string HCALSourceDataMonitorPlots::getBlockEventDirName(int event)
 void
 HCALSourceDataMonitorPlots::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 {
+  // get the mapping
+  iSetup.get<HcalDbRecord>().get( pSetup );
 }
 
 
@@ -426,6 +431,8 @@ HCALSourceDataMonitorPlots::endJob()
   eventTree_->SetBranchAddress("tubeName",treeTubeName_);
   eventTree_->SetBranchAddress("nChInEvent",&treeNChInEvent_);
   eventTree_->SetBranchAddress("chDenseIndex",treeChDenseIndex_);
+  eventTree_->SetBranchAddress("chHistMean",treeChHistMean_);
+  eventTree_->SetBranchAddress("chHistRMS",treeChHistRMS_);
   eventTree_->SetBranchAddress("chHistBinContentCap0",treeChHistBinContentCap0_);
   eventTree_->SetBranchAddress("chHistBinContentCap1",treeChHistBinContentCap1_);
   eventTree_->SetBranchAddress("chHistBinContentCap2",treeChHistBinContentCap2_);
@@ -448,6 +455,19 @@ HCALSourceDataMonitorPlots::endJob()
   TFile* outputRootFile = new TFile(rootOutputFileName_.c_str(),"recreate");
   outputRootFile->cd();
   TH1F* tempHist = new TH1F("tempHist","tempHist",32,0,31);
+  TH2F* firstEventHistMeanMapsHFM[2];
+  TH2F* firstEventHistMeanMapsHFP[2];
+  TH2F* firstEventHistRMSMapsHFM[2];
+  TH2F* firstEventHistRMSMapsHFP[2];
+  firstEventHistMeanMapsHFM[0] = new TH2F("firstEventHistMeanMapHFMDepth1","histMean HFM d1;i#eta;i#phi",13,-41,-28,36,1,73);
+  firstEventHistRMSMapsHFM[0] = new TH2F("firstEventHistRMSMapHFMDepth1","histRMS HFM d1;i#eta;i#phi",13,-41,-28,36,1,73);
+  firstEventHistMeanMapsHFP[0] = new TH2F("firstEventHistMeanMapHFPDepth1","histMean HFP d1;i#eta;i#phi",13,29,42,36,1,73);
+  firstEventHistRMSMapsHFP[0] = new TH2F("firstEventHistRMSMapHFPDepth1","histRMS HFP d1;i#eta;i#phi",13,29,42,36,1,73);
+  firstEventHistMeanMapsHFM[1] = new TH2F("firstEventHistMeanMapHFMDepth2","histMean HFM d2;i#eta;i#phi",13,-41,-28,36,1,73);
+  firstEventHistRMSMapsHFM[1] = new TH2F("firstEventHistRMSMapHFMDepth2","histRMS HFM d2;i#eta;i#phi",13,-41,-28,36,1,73);
+  firstEventHistMeanMapsHFP[1] = new TH2F("firstEventHistMeanMapHFPDepth2","histMean HFP d2;i#eta;i#phi",13,29,42,36,1,73);
+  firstEventHistRMSMapsHFP[1] = new TH2F("firstEventHistRMSMapHFPDepth2","histRMS HFP d2;i#eta;i#phi",13,29,42,36,1,73);
+  set<uint32_t> denseIndexAlreadyInMeanRMSMaps;
 
   // make plots dir
   int status = mkdir(plotsDirName_.c_str(), S_IRWXU);
@@ -464,6 +484,8 @@ HCALSourceDataMonitorPlots::endJob()
     return;
   }
 
+  int emptyChannels = 0;
+  int emptyChannelsHFMQ1Q4FEDs = 0;
   cout << "Running over " << maxEvents_ << " max events." << endl;
   // loop over tree
   int nevents = eventTree_->GetEntries();
@@ -521,36 +543,112 @@ HCALSourceDataMonitorPlots::endJob()
     subDir->cd();
 
     // loop over channels in event
-    for(int nCh = 0; nCh < treeNChInEvent_-1; ++nCh)
+    for(int nCh = 0; nCh < treeNChInEvent_; ++nCh)
     {
       HcalDetId detId = HcalDetId::detIdFromDenseIndex(treeChDenseIndex_[nCh]);
       RawHistoData* thisHistoData = rawHistoDataMap.insert(make_pair(make_pair(tubeName,detId), new RawHistoData(tubeName,detId,500000))).first->second;
 
       thisHistoData->eventNumbers.push_back(treeEventNum_);
       thisHistoData->reelPositions.push_back(treeReelPos_);
-      // make hist
-      string histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
-      tempHist->Reset();
-      tempHist->SetNameTitle(histName.c_str(),histName.c_str());
-      for(int ibin=0; ibin<31; ibin++) // exclude overflow bin
+      thisHistoData->histoAverages.push_back(treeChHistMean_[nCh]);
+      thisHistoData->histoRMSs.push_back(treeChHistRMS_[nCh]);
+      if(find(denseIndexAlreadyInMeanRMSMaps.begin(),denseIndexAlreadyInMeanRMSMaps.end(),treeChDenseIndex_[nCh])
+          == denseIndexAlreadyInMeanRMSMaps.end())
       {
-        int binValSum = treeChHistBinContentCap0_[nCh][ibin];
-        binValSum+=treeChHistBinContentCap1_[nCh][ibin];
-        binValSum+=treeChHistBinContentCap2_[nCh][ibin];
-        binValSum+=treeChHistBinContentCap3_[nCh][ibin];
-        for(int content = 0; content < binValSum; ++content)
-          tempHist->Fill(ibin);
+        if(treeChHistMean_[nCh] == 0)
+        {
+          const HcalElectronicsMap* readoutMap = pSetup->getHcalMapping();
+          HcalElectronicsId eid = readoutMap->lookup(detId);
+
+          if(detId.zside() < 0) // && (detId.iphi() > 55 || detId.iphi() < 19) )
+          {
+            cout << "ERROR: HF- detId: " << detId << " hist mean=0; eid "  << eid << endl;
+            ++emptyChannelsHFMQ1Q4FEDs;
+          }
+          ++emptyChannels;
+        }
+        else if(detId.subdet() == HcalForward && detId.zside() < 0)
+        {
+          firstEventHistMeanMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistMean_[nCh]);
+          firstEventHistRMSMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistRMS_[nCh]);
+          //if(detId.ietaAbs() > 39)
+          //{
+          //  if(detId.iphi()!=71)
+          //  {
+          //    firstEventHistMeanMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi()+1,treeChHistMean_[nCh]);
+          //    firstEventHistRMSMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi()+1,treeChHistRMS_[nCh]);
+          //  }
+          //  else
+          //  {
+          //    firstEventHistMeanMapsHFM[detId.depth()-1]->Fill(detId.ieta(),1,treeChHistMean_[nCh]);
+          //    firstEventHistRMSMapsHFM[detId.depth()-1]->Fill(detId.ieta(),1,treeChHistRMS_[nCh]);
+          //  }
+          //}
+        }
+        else if(detId.subdet() == HcalForward && detId.zside() > 0)
+        {
+          firstEventHistMeanMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistMean_[nCh]);
+          firstEventHistRMSMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistRMS_[nCh]);
+          //if(detId.ietaAbs() > 39)
+          //{
+          //  if(detId.iphi()!=71)
+          //  {
+          //    firstEventHistMeanMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi()+1,treeChHistMean_[nCh]);
+          //    firstEventHistRMSMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi()+1,treeChHistRMS_[nCh]);
+          //  }
+          //  else
+          //  {
+          //    firstEventHistMeanMapsHFM[detId.depth()-1]->Fill(detId.ieta(),1,treeChHistMean_[nCh]);
+          //    firstEventHistRMSMapsHFM[detId.depth()-1]->Fill(detId.ieta(),1,treeChHistRMS_[nCh]);
+          //  }
+          //}
+        }
+        denseIndexAlreadyInMeanRMSMaps.insert(treeChDenseIndex_[nCh]);
       }
+
       if(outputRawHistograms_)
+      {
+        // make hist
+        string histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
+        tempHist->Reset();
+        tempHist->SetNameTitle(histName.c_str(),histName.c_str());
+        for(int ibin=0; ibin<31; ibin++) // exclude overflow bin
+        {
+          int binValSum = treeChHistBinContentCap0_[nCh][ibin];
+          binValSum+=treeChHistBinContentCap1_[nCh][ibin];
+          binValSum+=treeChHistBinContentCap2_[nCh][ibin];
+          binValSum+=treeChHistBinContentCap3_[nCh][ibin];
+          for(int content = 0; content < binValSum; ++content)
+            tempHist->Fill(ibin);
+        }
         tempHist->Write();
-      thisHistoData->histoAverages.push_back(tempHist->GetMean());
-      thisHistoData->histoRMSs.push_back(tempHist->GetRMS());
+      }
     }
   }
 
   rootInputFile_->Close();
   cout << "Ended loop over events." << endl;
+  cout << "Saw " << emptyChannels << " empty channels total and " << emptyChannelsHFMQ1Q4FEDs << " empty channels in HF- Q1/Q4 FEDs." << endl;
 
+  // write maps
+  outputRootFile->cd();
+  firstEventHistMeanMapsHFM[0]->SetMaximum(5);
+  firstEventHistRMSMapsHFM[0]->SetMaximum(5);
+  firstEventHistMeanMapsHFM[1]->SetMaximum(5);
+  firstEventHistRMSMapsHFM[1]->SetMaximum(5);
+  firstEventHistMeanMapsHFP[0]->SetMaximum(5);
+  firstEventHistRMSMapsHFP[0]->SetMaximum(5);
+  firstEventHistMeanMapsHFP[1]->SetMaximum(5);
+  firstEventHistRMSMapsHFP[1]->SetMaximum(5);
+  
+  firstEventHistMeanMapsHFM[0]->Write();
+  firstEventHistRMSMapsHFM[0]->Write();
+  firstEventHistMeanMapsHFM[1]->Write();
+  firstEventHistRMSMapsHFM[1]->Write();
+  firstEventHistMeanMapsHFP[0]->Write();
+  firstEventHistRMSMapsHFP[0]->Write();
+  firstEventHistMeanMapsHFP[1]->Write();
+  firstEventHistRMSMapsHFP[1]->Write();
   // now make plots of avgVal vs. event number
   vector<string> imageNamesThisTube; 
   vector<string> reelImageNamesThisTube;

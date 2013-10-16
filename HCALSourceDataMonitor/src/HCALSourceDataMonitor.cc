@@ -97,6 +97,8 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       char treeTubeName_[100];
       int treeNChInEvent_;
       uint32_t treeChDenseIndex_[MAXCHPEREVENT];
+      float treeChHistMean_[MAXCHPEREVENT];
+      float treeChHistRMS_[MAXCHPEREVENT];
       uint16_t treeChHistBinContentCap0_[MAXCHPEREVENT][32];
       uint16_t treeChHistBinContentCap1_[MAXCHPEREVENT][32];
       uint16_t treeChHistBinContentCap2_[MAXCHPEREVENT][32];
@@ -137,6 +139,8 @@ HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
   eventTree_->Branch("tubeName",treeTubeName_,"tubeName/C");
   eventTree_->Branch("nChInEvent",&treeNChInEvent_);
   eventTree_->Branch("chDenseIndex",treeChDenseIndex_,"chDenseIndex[nChInEvent]/i");
+  eventTree_->Branch("chHistMean",treeChHistMean_,"chHistMean[nChInEvent]/F");
+  eventTree_->Branch("chHistRMS",treeChHistRMS_,"chHistRMS[nChInEvent]/F");
   eventTree_->Branch("chHistBinContentCap0",treeChHistBinContentCap0_,"chHistBinContentCap0[nChInEvent][32]/s");
   eventTree_->Branch("chHistBinContentCap1",treeChHistBinContentCap1_,"chHistBinContentCap1[nChInEvent][32]/s");
   eventTree_->Branch("chHistBinContentCap2",treeChHistBinContentCap2_,"chHistBinContentCap2[nChInEvent][32]/s");
@@ -284,6 +288,9 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
 
       //string histName = getRawHistName(eventNum,ieta,iphi,depth);
       treeChDenseIndex_[nChInEvent] = detId.denseIndex();
+      int binValSum = 0;
+      int binValSqrSum = 0;
+      int nEntries = 0;
       // loop over histogram bins
       for(int ib = 0; ib < 32; ib++)
       {
@@ -291,7 +298,23 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
         treeChHistBinContentCap1_[nChInEvent][ib] = idigi->get(1,ib); 
         treeChHistBinContentCap2_[nChInEvent][ib] = idigi->get(2,ib); 
         treeChHistBinContentCap3_[nChInEvent][ib] = idigi->get(3,ib); 
-      }  
+        if(ib > 30) continue; // don't compute avg/rms using overflow bin
+        binValSum+=ib*treeChHistBinContentCap0_[nChInEvent][ib];
+        binValSum+=ib*treeChHistBinContentCap1_[nChInEvent][ib];
+        binValSum+=ib*treeChHistBinContentCap2_[nChInEvent][ib];
+        binValSum+=ib*treeChHistBinContentCap3_[nChInEvent][ib];
+        binValSqrSum+=ib*ib*treeChHistBinContentCap0_[nChInEvent][ib];
+        binValSqrSum+=ib*ib*treeChHistBinContentCap1_[nChInEvent][ib];
+        binValSqrSum+=ib*ib*treeChHistBinContentCap2_[nChInEvent][ib];
+        binValSqrSum+=ib*ib*treeChHistBinContentCap3_[nChInEvent][ib];
+        nEntries+=treeChHistBinContentCap0_[nChInEvent][ib];
+        nEntries+=treeChHistBinContentCap1_[nChInEvent][ib];
+        nEntries+=treeChHistBinContentCap2_[nChInEvent][ib];
+        nEntries+=treeChHistBinContentCap3_[nChInEvent][ib];
+      }
+      treeChHistMean_[nChInEvent] = nEntries > 0 ? binValSum/(float)nEntries : 0;
+      treeChHistRMS_[nChInEvent] = nEntries > 0 ? sqrt(binValSqrSum/(float)nEntries - treeChHistMean_[nChInEvent]*treeChHistMean_[nChInEvent]) : 0;
+
       // used for looking at and saving raw hists
       if(printRawHistograms_)
       {

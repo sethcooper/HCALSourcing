@@ -84,6 +84,7 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       int naiveEvtNum_;
       TFile* rootFile_;
       TTree* eventTree_;
+      std::set<HcalDetId> emptyHistogramChannelsSet;
       // tree content
       int treeEventNum_;
       int treeOrbitNum_;
@@ -95,6 +96,7 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       float treeTimestamp1_;
       float treeTriggerTimestamp_;
       char treeTubeName_[100];
+      uint32_t treeDriverStatus_;
       int treeNChInEvent_;
       uint32_t treeChDenseIndex_[MAXCHPEREVENT];
       float treeChHistMean_[MAXCHPEREVENT];
@@ -137,6 +139,7 @@ HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
   eventTree_->Branch("timestamp1",&treeTimestamp1_);
   eventTree_->Branch("triggerTimestamp",&treeTriggerTimestamp_);
   eventTree_->Branch("tubeName",treeTubeName_,"tubeName/C");
+  eventTree_->Branch("driverStatus",&treeDriverStatus_);
   eventTree_->Branch("nChInEvent",&treeNChInEvent_);
   eventTree_->Branch("chDenseIndex",treeChDenseIndex_,"chDenseIndex[nChInEvent]/i");
   eventTree_->Branch("chHistMean",treeChHistMean_,"chHistMean[nChInEvent]/F");
@@ -203,6 +206,7 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   using namespace edm;
   using namespace std;
 
+
   naiveEvtNum_++;
   // FIXME: the first five empty events
   if(naiveEvtNum_ < 6) return;
@@ -256,6 +260,7 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   treeMotorCurrent_ = spd->motorCurrent();
   treeMotorVoltage_ = spd->motorVoltage();
   treeReelPos_ = spd->reelCounter();
+  treeDriverStatus_ = (uint32_t)spd->status();
   treeTriggerTimestamp_ = trigtimebase;
   treeTimestamp1_ = timebase;
   strcpy(treeTubeName_,tubeName.c_str());
@@ -314,6 +319,20 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       }
       treeChHistMean_[nChInEvent] = nEntries > 0 ? binValSum/(float)nEntries : 0;
       treeChHistRMS_[nChInEvent] = nEntries > 0 ? sqrt(binValSqrSum/(float)nEntries - treeChHistMean_[nChInEvent]*treeChHistMean_[nChInEvent]) : 0;
+      if(nEntries <= 30000)
+      {
+        emptyHistogramChannelsSet.insert(detId);
+        const HcalElectronicsMap* readoutMap = pSetup->getHcalMapping();
+        HcalElectronicsId eid = readoutMap->lookup(detId);
+        int ieta = detId.ieta();
+        int iphi = detId.iphi();
+        int depth = detId.depth();
+        cout << "ERROR: Found less than 30000 entries in histogram: only " << nEntries << " entries:" << endl;
+        cout << "event: " << eventNum << endl;
+        cout << "electronicsID: " << eid << endl;
+        cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
+        cout << *idigi << endl;
+      }
 
       // used for looking at and saving raw hists
       if(printRawHistograms_)
@@ -356,6 +375,14 @@ HCALSourceDataMonitor::endJob()
   rootFile_->cd();
   eventTree_->Write();
   rootFile_->Close();
+
+  std::cout << "The following " << emptyHistogramChannelsSet.size() << " channels had at least one empty histogram:" << std::endl;
+  // print out list of empty hist channels
+  for(std::set<HcalDetId>::const_iterator itr = emptyHistogramChannelsSet.begin(); itr != emptyHistogramChannelsSet.end(); ++itr)
+  {
+    std::cout << *itr << std::endl;
+  }
+  std::cout << "End of list of empty histogram channels." << std::endl;
 }
 
 // ------------ method called when starting to processes a run  ------------

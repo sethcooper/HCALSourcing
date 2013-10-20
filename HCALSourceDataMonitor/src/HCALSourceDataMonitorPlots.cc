@@ -55,6 +55,9 @@
 #include "TDirectory.h"
 #include "TCanvas.h"
 #include "TTree.h"
+#include "TStyle.h"
+#include "TPaveStats.h"
+#include "TPad.h"
 
 #define MAXCHPEREVENT 500
 //
@@ -101,6 +104,7 @@ class HCALSourceDataMonitorPlots : public edm::EDAnalyzer {
 
       void startHtml();
       void appendHtml(std::string tubeName, std::vector<std::string>& imageNames, std::string htmlFileName);
+      void appendHtmlMainPage(std::string tubeName, std::vector<std::string>& imageNamesEvt, std::vector<std::string>& imageNamesReel);
       void finishHtml(std::set<std::string> tubeNameSet);
       std::string getBlockEventDirName(int event);
       // ----------member data ---------------------------
@@ -127,6 +131,10 @@ class HCALSourceDataMonitorPlots : public edm::EDAnalyzer {
       std::vector<float> triggerTimeStampVals_;
       TFile* rootInputFile_;
       TFile* rootOutputFile_;
+      TH2F* firstEventHistMeanMapsHFM[2];
+      TH2F* firstEventHistMeanMapsHFP[2];
+      TH2F* firstEventHistRMSMapsHFM[2];
+      TH2F* firstEventHistRMSMapsHFP[2];
       TTree* eventTree_;
       // tree content
       int treeEventNum_;
@@ -140,6 +148,7 @@ class HCALSourceDataMonitorPlots : public edm::EDAnalyzer {
       float treeTriggerTimestamp_;
       char treeTubeName_[100];
       int treeNChInEvent_;
+      uint32_t treeDriverStatus_;
       uint32_t treeChDenseIndex_[MAXCHPEREVENT];
       float treeChHistMean_[MAXCHPEREVENT];
       float treeChHistRMS_[MAXCHPEREVENT];
@@ -253,10 +262,21 @@ bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName)
     //  return true;
     // TESTING
   }
-  else if(tubeName.find("HFM") != string::npos || tubeName.find("HFP") != string::npos)
+  else if(tubeName.find("HFM") != string::npos)
   {
     // for HF, tubes go into one tower (require same eta,phi)
     int tubeEta = atof(tubeName.substr(tubeName.find("ETA")+3,tubeName.find("_PHI")-1).c_str());
+    int tubePhi = atof(tubeName.substr(tubeName.find("PHI")+3,tubeName.find("_T")-1).c_str());
+    //cout << "tubeEta=" << tubeEta << "tubePhi=" << tubePhi << " chEta: " << ieta << " chPhi: " << iphi << endl;
+    ieta = fabs(ieta);
+    if(tubeEta==ieta && tubePhi==iphi)
+      return true;
+  }
+  else if(tubeName.find("HFP") != string::npos)
+  {
+    // for HF, tubes go into one tower (require same eta,phi)
+    int tubeEta = atof(tubeName.substr(tubeName.find("ETA")+3,tubeName.find("_PHI")-1).c_str());
+    int tubePhi = atof(tubeName.substr(tubeName.find("PHI")+3,tubeName.find("_T")-1).c_str());
     if(tubeEta==ieta && tubePhi==iphi)
       return true;
   }
@@ -310,6 +330,10 @@ void HCALSourceDataMonitorPlots::startHtml()
     htmlFile << "<title>Histogram Data" << "</title>\n";
     htmlFile << "</head>\n";
     htmlFile << "<body>\n";
+    if(selectDigiBasedOnTubeName_)
+    {
+      htmlFile << "<h2>Histogram Data for all channels matching tubes</h2>\n";
+    }
     htmlFile.close();
   }
 }
@@ -355,6 +379,44 @@ void HCALSourceDataMonitorPlots::appendHtml(std::string tubeName, std::vector<st
     htmlFile.close();
   }
 }
+
+void HCALSourceDataMonitorPlots::appendHtmlMainPage(std::string tubeName, std::vector<std::string>& imageNamesEvt, std::vector<std::string>& imageNamesReel)
+{
+  using namespace std;
+  ofstream htmlFile(htmlFileName_, ios::out | ios::app);
+  if(htmlFile.is_open())
+  {
+    htmlFile << "<h3>Tube name: " << tubeName << "</h3>\n";
+    htmlFile << "<table>\n";
+    htmlFile << "<tr>\n";
+    int counter = 0;
+    for(std::vector<std::string>::const_iterator imageName = imageNamesEvt.begin(); imageName != imageNamesEvt.end();
+        ++imageName)
+    {
+      if(counter % newRowEvery_ == 0)
+      {
+        htmlFile << "</tr>\n";
+        htmlFile << "<tr>\n";
+      }
+      htmlFile << "<td><a href=\"" << *imageName << "\"><img width=" << thumbnailSize_ << " src=\"" << *imageName << "\"></a></td>\n";
+      ++counter;
+    }
+    for(std::vector<std::string>::const_iterator imageName = imageNamesReel.begin(); imageName != imageNamesReel.end();
+        ++imageName)
+    {
+      if(counter % newRowEvery_ == 0)
+      {
+        htmlFile << "</tr>\n";
+        htmlFile << "<tr>\n";
+      }
+      htmlFile << "<td><a href=\"" << *imageName << "\"><img width=" << thumbnailSize_ << " src=\"" << *imageName << "\"></a></td>\n";
+      ++counter;
+    }
+    htmlFile << "</tr>\n";
+    htmlFile << "</table>\n";
+    htmlFile << "<hr>\n";
+  }
+}
 //
 void HCALSourceDataMonitorPlots::finishHtml(std::set<std::string> tubeNameSet)
 {
@@ -362,17 +424,59 @@ void HCALSourceDataMonitorPlots::finishHtml(std::set<std::string> tubeNameSet)
   ofstream htmlFile(htmlFileName_, ios::out | ios::app);
   if(htmlFile.is_open())
   {
+    htmlFile << "<hr>\n";
     htmlFile << "<h2>Histogram Avgs. vs. Event</h2>\n";
     for(set<string>::const_iterator tubeItr = tubeNameSet.begin(); tubeItr != tubeNameSet.end(); ++tubeItr)
     {
       htmlFile << "<a href=\"" << htmlDirName_ << "/" << *tubeItr << "_histAvgsVsEvent.html" << "\">Tube " << *tubeItr << "</a>\n";
+      htmlFile << "<br>\n";
     }
     htmlFile << "<hr>\n";
     htmlFile << "<h2>Histogram Avgs. vs. Reel Position</h2>\n";
     for(set<string>::const_iterator tubeItr = tubeNameSet.begin(); tubeItr != tubeNameSet.end(); ++tubeItr)
     {
       htmlFile << "<a href=\"" << htmlDirName_ <<  "/" << *tubeItr << "_histAvgsVsReel.html" << "\">Tube " << *tubeItr << "</a>\n";
+      htmlFile << "<br>\n";
     }
+    htmlFile << "<hr>\n";
+    htmlFile << "<h2>Mean/RMS Maps</h2>\n";
+    int mapThumbSize = 500;
+    if(firstEventHistMeanMapsHFM[0]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFM[0]->GetName() << ".png"
+        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFM[0]->GetName()
+        << ".png" << "\"></a>\n";
+    if(firstEventHistMeanMapsHFM[1]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFM[1]->GetName() << ".png"
+        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFM[1]->GetName()
+        << ".png" << "\"></a>\n";
+    htmlFile << "<br>\n";
+    if(firstEventHistMeanMapsHFP[0]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFP[0]->GetName() << ".png"
+        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFP[0]->GetName()
+        << ".png" << "\"></a>\n";
+    if(firstEventHistMeanMapsHFP[1]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFP[1]->GetName() << ".png"
+        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFP[1]->GetName()
+        << ".png" << "\"></a>\n";
+    htmlFile << "<br>\n";
+    if(firstEventHistRMSMapsHFM[0]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFM[0]->GetName() << ".png"
+        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFM[0]->GetName()
+        << ".png" << "\"></a>\n";
+    if(firstEventHistRMSMapsHFM[1]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFM[1]->GetName() << ".png"
+        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFM[1]->GetName()
+        << ".png" << "\"></a>\n";
+    htmlFile << "<br>\n";
+    if(firstEventHistRMSMapsHFP[0]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFP[0]->GetName() << ".png"
+        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFP[0]->GetName()
+        << ".png" << "\"></a>\n";
+    if(firstEventHistRMSMapsHFP[1]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFP[1]->GetName() << ".png"
+        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFP[1]->GetName()
+        << ".png" << "\"></a>\n";
+    htmlFile << "<br>\n";
     htmlFile << "<hr>\n";
     htmlFile << "<a href=\"" << rootOutputFileName_ << "\">Download Root file</a>\n";
     htmlFile << "</body>\n";
@@ -416,6 +520,8 @@ HCALSourceDataMonitorPlots::endJob()
 {
   using namespace std;
 
+  const int32_t in_detector_mask=0x00100000;
+
   // do initialization
   rootInputFile_ = new TFile(rootInputFileName_.c_str());
   eventTree_ = (TTree*) rootInputFile_->Get("eventTree");
@@ -429,6 +535,7 @@ HCALSourceDataMonitorPlots::endJob()
   eventTree_->SetBranchAddress("timestamp1",&treeTimestamp1_);
   eventTree_->SetBranchAddress("triggerTimestamp",&treeTriggerTimestamp_);
   eventTree_->SetBranchAddress("tubeName",treeTubeName_);
+  eventTree_->SetBranchAddress("driverStatus",&treeDriverStatus_);
   eventTree_->SetBranchAddress("nChInEvent",&treeNChInEvent_);
   eventTree_->SetBranchAddress("chDenseIndex",treeChDenseIndex_);
   eventTree_->SetBranchAddress("chHistMean",treeChHistMean_);
@@ -450,15 +557,13 @@ HCALSourceDataMonitorPlots::endJob()
   triggerTimeStampVals_.reserve(maxEvents_);
 
   map<pair<string,HcalDetId>, RawHistoData*> rawHistoDataMap;
+  map<HcalDetId,TH1F*> sourceGarageHistMap;
+  map<HcalDetId,TH1F*> sourceAbsorberHistMap;
   set<string> tubeNameSet;
   //vector<RawHistoData> rawHistoDataVec_;
   TFile* outputRootFile = new TFile(rootOutputFileName_.c_str(),"recreate");
   outputRootFile->cd();
   TH1F* tempHist = new TH1F("tempHist","tempHist",32,0,31);
-  TH2F* firstEventHistMeanMapsHFM[2];
-  TH2F* firstEventHistMeanMapsHFP[2];
-  TH2F* firstEventHistRMSMapsHFM[2];
-  TH2F* firstEventHistRMSMapsHFP[2];
   firstEventHistMeanMapsHFM[0] = new TH2F("firstEventHistMeanMapHFMDepth1","histMean HFM d1;i#eta;i#phi",13,-41,-28,36,1,73);
   firstEventHistRMSMapsHFM[0] = new TH2F("firstEventHistRMSMapHFMDepth1","histRMS HFM d1;i#eta;i#phi",13,-41,-28,36,1,73);
   firstEventHistMeanMapsHFP[0] = new TH2F("firstEventHistMeanMapHFPDepth1","histMean HFP d1;i#eta;i#phi",13,29,42,36,1,73);
@@ -484,6 +589,7 @@ HCALSourceDataMonitorPlots::endJob()
     return;
   }
 
+
   int emptyChannels = 0;
   int emptyChannelsHFMQ1Q4FEDs = 0;
   cout << "Running over " << maxEvents_ << " max events." << endl;
@@ -499,6 +605,8 @@ HCALSourceDataMonitorPlots::endJob()
       cout << "Loop: event " << evt << "; nChannels = " << treeNChInEvent_ << endl;
     else if((evt+2) > maxEvents_)
       cout << "Loop (last): event " << evt << "; nChannels = " << treeNChInEvent_ << endl;
+    else if(!selectDigiBasedOnTubeName_)
+      continue; // only look at each 100th (or last) event to speed things up if not selecting digi via tubeName
 
     eventTree_->GetEntry(evt);
     if(treeNChInEvent_ > MAXCHPEREVENT)
@@ -546,12 +654,6 @@ HCALSourceDataMonitorPlots::endJob()
     for(int nCh = 0; nCh < treeNChInEvent_; ++nCh)
     {
       HcalDetId detId = HcalDetId::detIdFromDenseIndex(treeChDenseIndex_[nCh]);
-      RawHistoData* thisHistoData = rawHistoDataMap.insert(make_pair(make_pair(tubeName,detId), new RawHistoData(tubeName,detId,500000))).first->second;
-
-      thisHistoData->eventNumbers.push_back(treeEventNum_);
-      thisHistoData->reelPositions.push_back(treeReelPos_);
-      thisHistoData->histoAverages.push_back(treeChHistMean_[nCh]);
-      thisHistoData->histoRMSs.push_back(treeChHistRMS_[nCh]);
       if(find(denseIndexAlreadyInMeanRMSMaps.begin(),denseIndexAlreadyInMeanRMSMaps.end(),treeChDenseIndex_[nCh])
           == denseIndexAlreadyInMeanRMSMaps.end())
       {
@@ -606,25 +708,70 @@ HCALSourceDataMonitorPlots::endJob()
         denseIndexAlreadyInMeanRMSMaps.insert(treeChDenseIndex_[nCh]);
       }
 
+      if(selectDigiBasedOnTubeName_)
+        if(!isDigiAssociatedToSourceTube(detId,tubeName))
+          continue;
+
+      //cout << "Associated this channel: " << detId << " with tube " << tubeName << endl;
+      RawHistoData* thisHistoData = rawHistoDataMap.insert(make_pair(make_pair(tubeName,detId), new RawHistoData(tubeName,detId,500000))).first->second;
+      TH1F* thisChannelHist = 0;
+      string histName = "hist_Ieta";
+      histName+=intToString(detId.ieta());
+      histName+="_Iphi";
+      histName+=intToString(detId.iphi());
+      histName+="_Depth";
+      histName+=intToString(detId.depth());
+      if(fabs(treeReelPos_) < 5)
+      {
+        histName+="_sourceInGarage";
+        pair<map<HcalDetId,TH1F*>::iterator,bool> ret;
+        ret = sourceGarageHistMap.insert(make_pair(detId, new TH1F(histName.c_str(),histName.c_str(),32,0,31)));
+        thisChannelHist = ret.first->second;
+        if(ret.second)
+          thisChannelHist->Sumw2();
+      }
+      else if(treeDriverStatus_ & in_detector_mask)
+      {
+        histName+="_sourceInAbsorber";
+        pair<map<HcalDetId,TH1F*>::iterator,bool> ret;
+        ret = sourceAbsorberHistMap.insert(make_pair(detId, new TH1F(histName.c_str(),histName.c_str(),32,0,31)));
+        thisChannelHist = ret.first->second;
+        if(ret.second)
+          thisChannelHist->Sumw2();
+      }
+
+      thisHistoData->eventNumbers.push_back(treeEventNum_);
+      thisHistoData->reelPositions.push_back(treeReelPos_);
+      thisHistoData->histoAverages.push_back(treeChHistMean_[nCh]);
+      thisHistoData->histoRMSs.push_back(treeChHistRMS_[nCh]);
+
+      // make hist
+      histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
+      tempHist->Reset();
+      tempHist->SetNameTitle(histName.c_str(),histName.c_str());
+      for(int ibin=0; ibin<31; ibin++) // exclude overflow bin
+      {
+        int binValSum = treeChHistBinContentCap0_[nCh][ibin];
+        binValSum+=treeChHistBinContentCap1_[nCh][ibin];
+        binValSum+=treeChHistBinContentCap2_[nCh][ibin];
+        binValSum+=treeChHistBinContentCap3_[nCh][ibin];
+        for(int content = 0; content < binValSum; ++content)
+        {
+          tempHist->Fill(ibin);
+          if(thisChannelHist != 0)
+          {
+            thisChannelHist->Fill(ibin);
+          }
+        }
+      }
+
       if(outputRawHistograms_)
       {
-        // make hist
-        string histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
-        tempHist->Reset();
-        tempHist->SetNameTitle(histName.c_str(),histName.c_str());
-        for(int ibin=0; ibin<31; ibin++) // exclude overflow bin
-        {
-          int binValSum = treeChHistBinContentCap0_[nCh][ibin];
-          binValSum+=treeChHistBinContentCap1_[nCh][ibin];
-          binValSum+=treeChHistBinContentCap2_[nCh][ibin];
-          binValSum+=treeChHistBinContentCap3_[nCh][ibin];
-          for(int content = 0; content < binValSum; ++content)
-            tempHist->Fill(ibin);
-        }
         tempHist->Write();
       }
     }
   }
+
 
   rootInputFile_->Close();
   cout << "Ended loop over events." << endl;
@@ -649,6 +796,103 @@ HCALSourceDataMonitorPlots::endJob()
   firstEventHistRMSMapsHFP[0]->Write();
   firstEventHistMeanMapsHFP[1]->Write();
   firstEventHistRMSMapsHFP[1]->Write();
+
+  // make images
+  TCanvas* canvasMap = new TCanvas("canvasMap","canvasMap",900,600);
+  gStyle->SetOptStat(11);
+  firstEventHistMeanMapsHFM[0]->Draw("colz"); gPad->Update();
+  TPaveStats *st = (TPaveStats*)firstEventHistMeanMapsHFM[0]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMapsHFM[0]->Draw("colz");
+  string fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistMeanMapsHFM[0]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistMeanMapsHFM[1]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistMeanMapsHFM[1]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMapsHFM[1]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistMeanMapsHFM[1]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistMeanMapsHFP[0]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistMeanMapsHFP[0]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMapsHFP[0]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistMeanMapsHFP[0]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistMeanMapsHFP[1]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistMeanMapsHFP[1]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMapsHFP[1]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistMeanMapsHFP[1]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  //
+  firstEventHistRMSMapsHFM[0]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistRMSMapsHFM[0]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMapsHFM[0]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistRMSMapsHFM[0]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistRMSMapsHFM[1]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistRMSMapsHFM[1]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMapsHFM[1]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistRMSMapsHFM[1]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistRMSMapsHFP[0]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistRMSMapsHFP[0]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMapsHFP[0]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistRMSMapsHFP[0]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistRMSMapsHFP[1]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistRMSMapsHFP[1]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMapsHFP[1]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistRMSMapsHFP[1]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+
+  gStyle->SetOptStat(2222211);
+
+  // do quality checks
+  for(map<HcalDetId,TH1F*>::const_iterator itr = sourceGarageHistMap.begin(); itr != sourceGarageHistMap.end(); ++itr)
+  {
+    TH1F* sourceGarageHist = itr->second;
+    //TH1F* sourceAbsorberHist = sourceAbsorberHistMap[itr->first];
+    map<HcalDetId,TH1F*>::iterator saHistItr = sourceAbsorberHistMap.find(itr->first);
+    if(saHistItr==sourceAbsorberHistMap.end())
+    {
+      cout << "ERROR: could not find source absorber hist for this channel: " << itr->first << endl;
+      continue;
+    }
+    TH1F* sourceAbsorberHist = saHistItr->second;
+    sourceGarageHist->Scale(sourceAbsorberHist->Integral(0,10)/sourceGarageHist->Integral(0,10));
+    // look for excess
+    if(sourceAbsorberHist->Integral(11,31)/sourceGarageHist->Integral(11,31) < 5)
+      cout << "ERROR: ratio of events in tail (bins 11-31) (sourceAbsorber/sourceGarage) < 5 for this channel: " << itr->first << endl;
+
+  }
+  // write per-channel source in/out hists; 
+  for(map<HcalDetId,TH1F*>::const_iterator itr = sourceGarageHistMap.begin(); itr != sourceGarageHistMap.end(); ++itr)
+    itr->second->Write();
+  for(map<HcalDetId,TH1F*>::const_iterator itr = sourceAbsorberHistMap.begin(); itr != sourceAbsorberHistMap.end(); ++itr)
+    itr->second->Write();
+
+
   // now make plots of avgVal vs. event number
   vector<string> imageNamesThisTube; 
   vector<string> reelImageNamesThisTube;
@@ -732,6 +976,8 @@ HCALSourceDataMonitorPlots::endJob()
     }
     appendHtml(thisTube,imageNamesThisTube,thisTube+"_histAvgsVsEvent.html");
     appendHtml(thisTube,reelImageNamesThisTube,thisTube+"_histAvgsVsReel.html");
+    if(selectDigiBasedOnTubeName_)
+      appendHtmlMainPage(thisTube,imageNamesThisTube,reelImageNamesThisTube);
   }
   cout << "Ending loop over tubes." << endl;
 

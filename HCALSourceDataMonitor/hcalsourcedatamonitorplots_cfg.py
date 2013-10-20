@@ -12,6 +12,13 @@ process.MessageLogger = cms.Service("MessageLogger",
      destinations = cms.untracked.vstring('cout')
 )
 
+##-- GT conditions for all
+process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
+from Configuration.AlCa.autoCond import autoCond
+process.GlobalTag.globaltag = autoCond['com10'] ## == GR_R_53_V16::All in 5_3_7
+###-- Customized particular conditions
+from CondCore.DBCommon.CondDBSetup_cfi import *
+
 process.source = cms.Source("EmptySource")
 process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(1) )
 
@@ -22,7 +29,7 @@ process.hcalSourceDataMonPlots = cms.EDAnalyzer('HCALSourceDataMonitorPlots',
     ThumbnailSize = cms.untracked.int32(350),
     OutputRawHistograms = cms.untracked.bool(True),
     SelectDigiBasedOnTubeName = cms.untracked.bool(False), # unimplemented for now
-    MaxEvents = cms.untracked.int32(100)
+    #MaxEvents = cms.untracked.int32(100)
 )
 
 process.p = cms.Path(

@@ -58,7 +58,8 @@ process.source = cms.Source("HcalTBSource",
         #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006705.root' # source run (nonCalibMode), all layers
         #'file:/afs/cern.ch/user/s/scooper/HTB_006954.root'
         #'file:USC_214641.root'
-        'file:USC_214756.root'
+        'file:USC_214753.root'
+        #'file:USC_214756.root'
         #'file:HTB_006804.root'
     )
 )
@@ -90,18 +91,18 @@ process.hcalhistos.FEDs = cms.untracked.vint32(718,719,720,721,722,723)
 #)
 
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
-    RootFileName = cms.untracked.string('hcalSourceDataMon.test1000evts.214756.oct9.root'),
+    RootFileName = cms.untracked.string('hcalSourceDataMon.test1000evts.214753.oct10.root'),
     PrintRawHistograms = cms.untracked.bool(False),
     SelectDigiBasedOnTubeName = cms.untracked.bool(False)
 )
 
 process.hcalSourceDataMonPlots = cms.EDAnalyzer('HCALSourceDataMonitorPlots',
     RootInputFileName = process.hcalSourceDataMon.RootFileName,
-    RootOutputFileName = cms.untracked.string('hcalSourceDataMonPlots.test1000evts.214756.oct9.root'),
+    RootOutputFileName = cms.untracked.string('hcalSourceDataMonPlots.test1000evts.214753.oct10.root'),
     NewRowEvery = cms.untracked.int32(4),
     ThumbnailSize = cms.untracked.int32(350),
     OutputRawHistograms = cms.untracked.bool(True),
-    SelectDigiBasedOnTubeName = cms.untracked.bool(False), # unimplemented for now
+    SelectDigiBasedOnTubeName = cms.untracked.bool(True),
     #MaxEvents = cms.untracked.int32(100)
     #HtmlFileName
     #HtmlDirName

@@ -184,10 +184,21 @@ bool HCALSourceDataMonitor::isDigiAssociatedToSourceTube(const HcalDetId& detId,
     //  return true;
     // TESTING
   }
-  else if(tubeName.find("HFM") != string::npos || tubeName.find("HFP") != string::npos)
+  else if(tubeName.find("HFM") != string::npos)
   {
     // for HF, tubes go into one tower (require same eta,phi)
     int tubeEta = atof(tubeName.substr(tubeName.find("ETA")+3,tubeName.find("_PHI")-1).c_str());
+    int tubePhi = atof(tubeName.substr(tubeName.find("PHI")+3,tubeName.find("_T")-1).c_str());
+    //cout << "tubeEta=" << tubeEta << "tubePhi=" << tubePhi << " chEta: " << ieta << " chPhi: " << iphi << endl;
+    ieta = fabs(ieta);
+    if(tubeEta==ieta && tubePhi==iphi)
+      return true;
+  }
+  else if(tubeName.find("HFP") != string::npos)
+  {
+    // for HF, tubes go into one tower (require same eta,phi)
+    int tubeEta = atof(tubeName.substr(tubeName.find("ETA")+3,tubeName.find("_PHI")-1).c_str());
+    int tubePhi = atof(tubeName.substr(tubeName.find("PHI")+3,tubeName.find("_T")-1).c_str());
     if(tubeEta==ieta && tubePhi==iphi)
       return true;
   }

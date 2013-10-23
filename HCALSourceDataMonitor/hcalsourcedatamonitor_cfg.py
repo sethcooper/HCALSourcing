@@ -33,34 +33,13 @@ from CondCore.DBCommon.CondDBSetup_cfi import *
 #)
 #process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
 
-#process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
-process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(1000) )
+process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
+#process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(100) )
 
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use
     fileNames = cms.untracked.vstring(
-        # run with source driver moving: http://cmsonline.cern.ch/cms-elog/804153
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALFWAnalyzer/HTB_006096.root'
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALFWAnalyzer/HTB_006598.root'
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALFWAnalyzer/HTB_006628.root'
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006643.root'
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006655.root'
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006668.root'
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006675.root'
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006688.root'
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006692.root' # normal run, Jul 22
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006694.root' # run with calibMode set, Jul 22
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006697.root' # first source run, layer1, Jul 22
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006700.root' # second source run (calibMode), layer1, Jul 22
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006702.root' # 3rd source run (calibMode), layer10, Jul 22
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.root', # 4th source run (calibMode), all layers
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006703.1.root' # 4th source run (calibMode), all layers, file2
-        #'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/525/HCALFWAnalysis/src/HCALSourcing/HCALSourceDataMonitor/HTB_006705.root' # source run (nonCalibMode), all layers
-        #'file:/afs/cern.ch/user/s/scooper/HTB_006954.root'
-        #'file:USC_214641.root'
-        'file:USC_214753.root'
-        #'file:USC_214756.root'
-        #'file:HTB_006804.root'
+        'file:/bigspool/usc/USC_215595.root'
     )
 )
 
@@ -91,14 +70,14 @@ process.hcalhistos.FEDs = cms.untracked.vint32(718,719,720,721,722,723)
 #)
 
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
-    RootFileName = cms.untracked.string('hcalSourceDataMon.test1000evts.214753.oct10.root'),
+    RootFileName = cms.untracked.string('hcalSourceDataMon.215595.root'),
     PrintRawHistograms = cms.untracked.bool(False),
     SelectDigiBasedOnTubeName = cms.untracked.bool(False)
 )
 
 process.hcalSourceDataMonPlots = cms.EDAnalyzer('HCALSourceDataMonitorPlots',
     RootInputFileName = process.hcalSourceDataMon.RootFileName,
-    RootOutputFileName = cms.untracked.string('hcalSourceDataMonPlots.test1000evts.214753.oct10.root'),
+    RootOutputFileName = cms.untracked.string('hcalSourceDataMonPlots.215595.root'),
     NewRowEvery = cms.untracked.int32(4),
     ThumbnailSize = cms.untracked.int32(350),
     OutputRawHistograms = cms.untracked.bool(True),

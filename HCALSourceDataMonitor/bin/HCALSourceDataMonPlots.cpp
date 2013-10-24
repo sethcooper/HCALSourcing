@@ -692,7 +692,7 @@ int main(int argc, char ** argv)
       tempHist->SetNameTitle(histName.c_str(),histName.c_str());
       for(int ibin=0; ibin<32; ibin++)
       {
-        int binValSum = treeChHistBinContentCap0_[nCh][ibin];
+        float binValSum = treeChHistBinContentCap0_[nCh][ibin];
         binValSum+=treeChHistBinContentCap1_[nCh][ibin];
         binValSum+=treeChHistBinContentCap2_[nCh][ibin];
         binValSum+=treeChHistBinContentCap3_[nCh][ibin];

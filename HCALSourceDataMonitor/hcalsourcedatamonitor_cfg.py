@@ -20,18 +20,6 @@ process.GlobalTag.globaltag = autoCond['com10'] ## == GR_R_53_V16::All in 5_3_7
 ###-- Customized particular conditions
 from CondCore.DBCommon.CondDBSetup_cfi import *
 
-##----------------------------------- replacing conditions with txt ones
-#process.es_ascii = cms.ESSource("HcalTextCalibrations",
-# input = cms.VPSet(
-#   cms.PSet(
-#     object = cms.string('ElectronicsMap'),
-#     #file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_H2_validatedSIC_jul2013.txt')
-#     # back to old emap, now that fiber number is fixed in unpacker
-#     file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_HCAL_H2_BI_modSIC_apr2013.txt')
-#   )
-# )
-#)
-#process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
 
 process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(100) )
@@ -39,7 +27,7 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use
     fileNames = cms.untracked.vstring(
-        'file:/bigspool/usc/USC_215595.root'
+        'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/HCALSourcingWork/src/HCALSourcing/HCALSourceDataMonitor/USC_215595.root'
     )
 )
 
@@ -70,31 +58,13 @@ process.hcalhistos.FEDs = cms.untracked.vint32(718,719,720,721,722,723)
 #)
 
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
-    RootFileName = cms.untracked.string('hcalSourceDataMon.215595.root'),
+    RootFileName = cms.untracked.string('hcalSourceDataMon.test.215595.root'),
     PrintRawHistograms = cms.untracked.bool(False),
-    SelectDigiBasedOnTubeName = cms.untracked.bool(False)
+    SelectDigiBasedOnTubeName = cms.untracked.bool(True)
 )
-
-process.hcalSourceDataMonPlots = cms.EDAnalyzer('HCALSourceDataMonitorPlots',
-    RootInputFileName = process.hcalSourceDataMon.RootFileName,
-    RootOutputFileName = cms.untracked.string('hcalSourceDataMonPlots.215595.root'),
-    NewRowEvery = cms.untracked.int32(4),
-    ThumbnailSize = cms.untracked.int32(350),
-    OutputRawHistograms = cms.untracked.bool(True),
-    SelectDigiBasedOnTubeName = cms.untracked.bool(True),
-    #MaxEvents = cms.untracked.int32(100)
-    #HtmlFileName
-    #HtmlDirName
-    #PlotsDirName
-
-)
-
-process.load("FWCore.Modules.printContent_cfi")
-                     #*process.printContent
 
 process.p = cms.Path(process.tbunpack
                      *process.hcalhistos
                      *process.hcalSourceDataMon
                     )
 
-process.endp = cms.EndPath(process.hcalSourceDataMonPlots)

@@ -640,6 +640,8 @@ int main(int argc, char ** argv)
       histName+=intToString(detId.iphi());
       histName+="_Depth";
       histName+=intToString(detId.depth());
+      histName+="_";
+      histName+=tubeName;
       string histNameUneven = histName;
       histNameUneven+="_uneven";
       if(fabs(treeReelPos_) < 5)

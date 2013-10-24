@@ -500,6 +500,8 @@ int main(int argc, char ** argv)
   map<pair<string,HcalDetId>, RawHistoData*> rawHistoDataMap;
   set<string> garageHistNameSet;
   set<string> absorberHistNameSet;
+  set<string> garageHistUnevenNameSet;
+  set<string> absorberHistUnevenNameSet;
   set<string> tubeNameSet;
   //vector<RawHistoData> rawHistoDataVec_;
   TFile* outputRootFile = new TFile(rootOutputFileName_.c_str(),"recreate");
@@ -514,6 +516,11 @@ int main(int argc, char ** argv)
   firstEventHistMeanMapsHFP[1] = new TH2F("firstEventHistMeanMapHFPDepth2","histMean HFP d2;i#eta;i#phi",13,29,42,36,1,73);
   firstEventHistRMSMapsHFP[1] = new TH2F("firstEventHistRMSMapHFPDepth2","histRMS HFP d2;i#eta;i#phi",13,29,42,36,1,73);
   set<uint32_t> denseIndexAlreadyInMeanRMSMaps;
+
+  int NHbins = 32;
+  float binsArray[33]  =   {0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
+                      17.0, 19.0, 21.0, 23.0, 25.0, 27.0, 29.0, 32.0, 35.0, 38.0, 41.0, 45.0, 49.0, 53.0,
+                      58.0, 63.0, 64.0};
 
   // make plots dir
   int status = mkdir(plotsDirName_.c_str(), S_IRWXU);
@@ -626,21 +633,32 @@ int main(int argc, char ** argv)
       //cout << "Associated this channel: " << detId << " with tube " << tubeName << endl;
       RawHistoData* thisHistoData = rawHistoDataMap.insert(make_pair(make_pair(tubeName,detId), new RawHistoData(tubeName,detId,500000))).first->second;
       TH1F* thisChannelHist = 0;
+      TH1F* thisChannelUnevenBinsHist = 0;
       string histName = "hist_Ieta";
       histName+=intToString(detId.ieta());
       histName+="_Iphi";
       histName+=intToString(detId.iphi());
       histName+="_Depth";
       histName+=intToString(detId.depth());
+      string histNameUneven = histName;
+      histNameUneven+="_uneven";
       if(fabs(treeReelPos_) < 5)
       {
         histName+="_sourceInGarage";
         thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
         if(!thisChannelHist)
         {
-          thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),32,0,31);
+          thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
           thisChannelHist->Sumw2();
           garageHistNameSet.insert(histName);
+        }
+        histNameUneven+="_sourceInGarage";
+        thisChannelUnevenBinsHist = (TH1F*)gDirectory->GetList()->FindObject(histNameUneven.c_str());
+        if(!thisChannelUnevenBinsHist)
+        {
+          thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histNameUneven.c_str(),NHbins,binsArray);
+          thisChannelUnevenBinsHist->Sumw2();
+          garageHistUnevenNameSet.insert(histNameUneven);
         }
       }
       else if(treeDriverStatus_ & in_detector_mask)
@@ -649,9 +667,17 @@ int main(int argc, char ** argv)
         thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
         if(!thisChannelHist)
         {
-          thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),32,0,31);
+          thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
           thisChannelHist->Sumw2();
           absorberHistNameSet.insert(histName);
+        }
+        histNameUneven+="_sourceInAbsorber";
+        thisChannelUnevenBinsHist = (TH1F*)gDirectory->GetList()->FindObject(histNameUneven.c_str());
+        if(!thisChannelUnevenBinsHist)
+        {
+          thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histNameUneven.c_str(),NHbins,binsArray);
+          thisChannelUnevenBinsHist->Sumw2();
+          garageHistUnevenNameSet.insert(histNameUneven);
         }
       }
 
@@ -664,7 +690,7 @@ int main(int argc, char ** argv)
       histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
       tempHist->Reset();
       tempHist->SetNameTitle(histName.c_str(),histName.c_str());
-      for(int ibin=0; ibin<31; ibin++) // exclude overflow bin
+      for(int ibin=0; ibin<32; ibin++)
       {
         int binValSum = treeChHistBinContentCap0_[nCh][ibin];
         binValSum+=treeChHistBinContentCap1_[nCh][ibin];
@@ -678,13 +704,24 @@ int main(int argc, char ** argv)
             thisChannelHist->Fill(ibin);
           }
         }
-      }
 
+        if(ibin < 15) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum);
+        if(14<ibin && ibin<22) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/2.0);
+        if(21<ibin && ibin<26) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/3.0);
+        if(25<ibin && ibin<29) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/4.0);
+        if(28<ibin) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/5.0);
+
+      }
+      
       if(outputRawHistograms_)
       {
         tempHist->Write();
       }
     }
+  }
+
+  for(int ibin=0; ibin<32; ibin++)
+  {
   }
 
 
@@ -806,6 +843,11 @@ int main(int argc, char ** argv)
   for(set<string>::const_iterator itr = garageHistNameSet.begin(); itr != garageHistNameSet.end(); ++itr)
     gDirectory->GetList()->FindObject(itr->c_str())->Write();
   for(set<string>::const_iterator itr = absorberHistNameSet.begin(); itr != absorberHistNameSet.end(); ++itr)
+    gDirectory->GetList()->FindObject(itr->c_str())->Write();
+  // uneven
+  for(set<string>::const_iterator itr = garageHistUnevenNameSet.begin(); itr != garageHistUnevenNameSet.end(); ++itr)
+    gDirectory->GetList()->FindObject(itr->c_str())->Write();
+  for(set<string>::const_iterator itr = absorberHistUnevenNameSet.begin(); itr != absorberHistUnevenNameSet.end(); ++itr)
     gDirectory->GetList()->FindObject(itr->c_str())->Write();
 
 

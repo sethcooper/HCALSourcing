@@ -57,16 +57,6 @@ int thumbnailSize_;
 bool outputRawHistograms_;
 bool selectDigiBasedOnTubeName_;
 int maxEvents_;
-std::vector<float> evtNumbers_;
-std::vector<float> orbitNumbers_;
-std::vector<float> orbitNumberSecs_;
-std::vector<float> indexVals_;
-std::vector<float> messageCounterVals_;
-std::vector<float> motorCurrentVals_;
-std::vector<float> motorVoltageVals_;
-std::vector<float> reelVals_;
-std::vector<float> timeStamp1Vals_;
-std::vector<float> triggerTimeStampVals_;
 TFile* rootInputFile_;
 TFile* rootOutputFile_;
 TH2F* firstEventHistMeanMapsHFM[2];
@@ -74,6 +64,11 @@ TH2F* firstEventHistMeanMapsHFP[2];
 TH2F* firstEventHistRMSMapsHFM[2];
 TH2F* firstEventHistRMSMapsHFP[2];
 TTree* eventTree_;
+std::vector<float> evtNumbers_;
+std::vector<float> orbitNumberSecs_;
+std::vector<float> indexVals_;
+std::vector<float> motorCurrentVals_;
+std::vector<float> reelVals_;
 // tree content
 int treeEventNum_;
 int treeOrbitNum_;
@@ -491,11 +486,11 @@ int main(int argc, char ** argv)
   eventTree_->SetBranchAddress("chHistBinContentCap2",treeChHistBinContentCap2_);
   eventTree_->SetBranchAddress("chHistBinContentCap3",treeChHistBinContentCap3_);
 
-  evtNumbers_.reserve(maxEvents_);
-  orbitNumberSecs_.reserve(maxEvents_);
-  indexVals_.reserve(maxEvents_);
-  motorCurrentVals_.reserve(maxEvents_);
-  reelVals_.reserve(maxEvents_);
+  evtNumbers_.reserve(500000);
+  orbitNumberSecs_.reserve(500000);
+  indexVals_.reserve(500000);
+  motorCurrentVals_.reserve(500000);
+  reelVals_.reserve(500000);
 
   map<pair<string,HcalDetId>, RawHistoData*> rawHistoDataMap;
   set<string> garageHistNameSet;
@@ -564,11 +559,14 @@ int main(int argc, char ** argv)
       return -2;
     }
 
-    evtNumbers_.push_back(treeEventNum_);
-    orbitNumberSecs_.push_back(88.9e-6*treeOrbitNum_);
-    indexVals_.push_back(treeIndex_);
-    motorCurrentVals_.push_back(treeMotorCurrent_);
-    reelVals_.push_back(treeReelPos_);
+    if(evt % 100 == 0) // only do this for each 100th event
+    {
+      evtNumbers_.push_back(treeEventNum_);
+      orbitNumberSecs_.push_back(88.9e-6*treeOrbitNum_);
+      indexVals_.push_back(treeIndex_);
+      motorCurrentVals_.push_back(treeMotorCurrent_);
+      reelVals_.push_back(treeReelPos_);
+    }
 
     string tubeName = string(treeTubeName_);
     tubeNameSet.insert(tubeName);
@@ -601,37 +599,37 @@ int main(int argc, char ** argv)
     for(int nCh = 0; nCh < treeNChInEvent_; ++nCh)
     {
       HcalDetId detId = HcalDetId::detIdFromDenseIndex(treeChDenseIndex_[nCh]);
-      if(find(denseIndexAlreadyInMeanRMSMaps.begin(),denseIndexAlreadyInMeanRMSMaps.end(),treeChDenseIndex_[nCh])
-          == denseIndexAlreadyInMeanRMSMaps.end())
-      {
-        if(treeChHistMean_[nCh] == 0)
-        {
-          if(detId.zside() < 0) // && (detId.iphi() > 55 || detId.iphi() < 19) )
-          {
-            cout << "ERROR: HF- detId: " << detId << " hist mean=0" << endl;
-            ++emptyChannelsHFMQ1Q4FEDs;
-          }
-          ++emptyChannels;
-        }
-        else if(detId.subdet() == HcalForward && detId.zside() < 0)
-        {
-          firstEventHistMeanMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistMean_[nCh]);
-          firstEventHistRMSMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistRMS_[nCh]);
-        }
-        else if(detId.subdet() == HcalForward && detId.zside() > 0)
-        {
-          firstEventHistMeanMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistMean_[nCh]);
-          firstEventHistRMSMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistRMS_[nCh]);
-        }
-        denseIndexAlreadyInMeanRMSMaps.insert(treeChDenseIndex_[nCh]);
-      }
+      //if(find(denseIndexAlreadyInMeanRMSMaps.begin(),denseIndexAlreadyInMeanRMSMaps.end(),treeChDenseIndex_[nCh])
+      //    == denseIndexAlreadyInMeanRMSMaps.end())
+      //{
+      //  if(treeChHistMean_[nCh] == 0)
+      //  {
+      //    if(detId.zside() < 0) // && (detId.iphi() > 55 || detId.iphi() < 19) )
+      //    {
+      //      cout << "ERROR: HF- detId: " << detId << " hist mean=0" << endl;
+      //      ++emptyChannelsHFMQ1Q4FEDs;
+      //    }
+      //    ++emptyChannels;
+      //  }
+      //  else if(detId.subdet() == HcalForward && detId.zside() < 0)
+      //  {
+      //    firstEventHistMeanMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistMean_[nCh]);
+      //    firstEventHistRMSMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistRMS_[nCh]);
+      //  }
+      //  else if(detId.subdet() == HcalForward && detId.zside() > 0)
+      //  {
+      //    firstEventHistMeanMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistMean_[nCh]);
+      //    firstEventHistRMSMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistRMS_[nCh]);
+      //  }
+      //  denseIndexAlreadyInMeanRMSMaps.insert(treeChDenseIndex_[nCh]);
+      //}
 
       if(selectDigiBasedOnTubeName_)
         if(!isDigiAssociatedToSourceTube(detId,tubeName))
           continue;
 
       //cout << "Associated this channel: " << detId << " with tube " << tubeName << endl;
-      RawHistoData* thisHistoData = rawHistoDataMap.insert(make_pair(make_pair(tubeName,detId), new RawHistoData(tubeName,detId,500000))).first->second;
+      RawHistoData* thisHistoData = rawHistoDataMap.insert(make_pair(make_pair(tubeName,detId), new RawHistoData(tubeName,detId,50000))).first->second;
       TH1F* thisChannelHist = 0;
       TH1F* thisChannelUnevenBinsHist = 0;
       string histName = "hist_Ieta";
@@ -647,18 +645,20 @@ int main(int argc, char ** argv)
       if(fabs(treeReelPos_) < 5)
       {
         histName+="_sourceInGarage";
-        thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
-        if(!thisChannelHist)
-        {
-          thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
-          thisChannelHist->Sumw2();
-          garageHistNameSet.insert(histName);
-        }
+        //thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
+        //if(!thisChannelHist)
+        //{
+        //  thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
+        //  thisChannelHist->Sumw2();
+        //  garageHistNameSet.insert(histName);
+        //}
         histNameUneven+="_sourceInGarage";
         thisChannelUnevenBinsHist = (TH1F*)gDirectory->GetList()->FindObject(histNameUneven.c_str());
         if(!thisChannelUnevenBinsHist)
         {
-          thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histNameUneven.c_str(),NHbins,binsArray);
+          string histTitleUneven = histNameUneven;
+          histTitleUneven+=";linearized QIE counts";
+          thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histTitleUneven.c_str(),NHbins,binsArray);
           thisChannelUnevenBinsHist->Sumw2();
           garageHistUnevenNameSet.insert(histNameUneven);
         }
@@ -666,27 +666,32 @@ int main(int argc, char ** argv)
       else if(treeDriverStatus_ & in_detector_mask)
       {
         histName+="_sourceInAbsorber";
-        thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
-        if(!thisChannelHist)
-        {
-          thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
-          thisChannelHist->Sumw2();
-          absorberHistNameSet.insert(histName);
-        }
+        //thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
+        //if(!thisChannelHist)
+        //{
+        //  thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
+        //  thisChannelHist->Sumw2();
+        //  absorberHistNameSet.insert(histName);
+        //}
         histNameUneven+="_sourceInAbsorber";
         thisChannelUnevenBinsHist = (TH1F*)gDirectory->GetList()->FindObject(histNameUneven.c_str());
         if(!thisChannelUnevenBinsHist)
         {
-          thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histNameUneven.c_str(),NHbins,binsArray);
+          string histTitleUneven = histNameUneven;
+          histTitleUneven+=";linearized QIE counts";
+          thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histTitleUneven.c_str(),NHbins,binsArray);
           thisChannelUnevenBinsHist->Sumw2();
-          garageHistUnevenNameSet.insert(histNameUneven);
+          absorberHistUnevenNameSet.insert(histNameUneven);
         }
       }
 
-      thisHistoData->eventNumbers.push_back(treeEventNum_);
-      thisHistoData->reelPositions.push_back(treeReelPos_);
-      thisHistoData->histoAverages.push_back(treeChHistMean_[nCh]);
-      thisHistoData->histoRMSs.push_back(treeChHistRMS_[nCh]);
+      if(evt % 100 == 0 || evt % 101 == 0 || evt % 102 == 0 || evt % 104 == 0) // only do this for each 100th-ish event
+      {
+        thisHistoData->eventNumbers.push_back(treeEventNum_);
+        thisHistoData->reelPositions.push_back(treeReelPos_);
+        thisHistoData->histoAverages.push_back(treeChHistMean_[nCh]);
+        thisHistoData->histoRMSs.push_back(treeChHistRMS_[nCh]);
+      }
 
       // make hist
       histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
@@ -698,14 +703,14 @@ int main(int argc, char ** argv)
         binValSum+=treeChHistBinContentCap1_[nCh][ibin];
         binValSum+=treeChHistBinContentCap2_[nCh][ibin];
         binValSum+=treeChHistBinContentCap3_[nCh][ibin];
-        for(int content = 0; content < binValSum; ++content)
-        {
-          tempHist->Fill(ibin);
-          if(thisChannelHist != 0)
-          {
-            thisChannelHist->Fill(ibin);
-          }
-        }
+        //for(int content = 0; content < binValSum; ++content)
+        //{
+        //  tempHist->Fill(ibin);
+        //  //if(thisChannelHist != 0)
+        //  //{
+        //  //  thisChannelHist->Fill(ibin);
+        //  //}
+        //}
 
         if(ibin < 15) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum);
         if(14<ibin && ibin<22) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/2.0);
@@ -715,17 +720,12 @@ int main(int argc, char ** argv)
 
       }
       
-      if(outputRawHistograms_)
-      {
-        tempHist->Write();
-      }
+      //if(outputRawHistograms_)
+      //{
+      //  tempHist->Write();
+      //}
     }
   }
-
-  for(int ibin=0; ibin<32; ibin++)
-  {
-  }
-
 
   rootInputFile_->Close();
   cout << "Ended loop over events." << endl;
@@ -823,16 +823,18 @@ int main(int argc, char ** argv)
   gStyle->SetOptStat(2222211);
 
   // do quality checks
-  for(set<string>::const_iterator itr = garageHistNameSet.begin(); itr != garageHistNameSet.end(); ++itr)
+  for(set<string>::const_iterator itr = garageHistUnevenNameSet.begin(); itr != garageHistUnevenNameSet.end(); ++itr)
   {
     TH1F* sourceGarageHist = (TH1F*)gDirectory->GetList()->FindObject(itr->c_str());
     string abHistName = *itr;
     abHistName = abHistName.substr(0,abHistName.find("Garage"));
+    cout << "abHistName=" << abHistName << endl;
     abHistName+="Absorber";
+    cout << "abHistName2=" << abHistName << endl;
     TH1F* sourceAbsorberHist = (TH1F*)gDirectory->GetList()->FindObject(abHistName.c_str());
     if(!sourceAbsorberHist)
     {
-      cout << "ERROR: could not find source absorber hist:" << *itr << endl;
+      cout << "ERROR: could not find source absorber hist:" << abHistName << endl;
       continue;
     }
     sourceGarageHist->Scale(sourceAbsorberHist->Integral(0,10)/sourceGarageHist->Integral(0,10));
@@ -840,6 +842,24 @@ int main(int argc, char ** argv)
     if(sourceAbsorberHist->Integral(11,31)/sourceGarageHist->Integral(11,31) < 5)
       cout << "ERROR: ratio of events in tail (bins 11-31) (sourceAbsorber/sourceGarage) < 5 for this hist: " << sourceAbsorberHist << endl;
 
+    TCanvas* t = new TCanvas("canvas","canvas",900,600);
+    t->cd();
+    t->SetLogy();
+    sourceGarageHist->SetStats(0);
+    sourceGarageHist->Draw();
+    sourceAbsorberHist->SetStats(0);
+    sourceAbsorberHist->SetLineColor(2);
+    sourceAbsorberHist->Draw("same");
+    string imgName = *itr;
+    imgName = imgName.substr(0,imgName.find("Garage"));
+    imgName+="AbsorberAndGarageOverlay";
+    string fullPath = plotsDirName_;
+    fullPath+="/";
+    fullPath+=imgName;
+    fullPath+=".png";
+    cout << "fullPath=" << fullPath << endl;
+    t->Print(fullPath.c_str());
+    delete t;
   }
   // write per-channel source in/out hists; 
   for(set<string>::const_iterator itr = garageHistNameSet.begin(); itr != garageHistNameSet.end(); ++itr)

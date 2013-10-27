@@ -545,9 +545,9 @@ int main(int argc, char ** argv)
       break;
 
     if(evt % 1000 == 0)
-      cout << "Loop: event " << evt << "; nChannels = " << treeNChInEvent_ << endl;
+      cout << "Loop: event " << evt << endl;
     else if((evt+2) > maxEvents_)
-      cout << "Loop (last): event " << evt << "; nChannels = " << treeNChInEvent_ << endl;
+      cout << "Loop (last): event " << evt << endl;
     else if(!selectDigiBasedOnTubeName_)
       if(evt % 100 != 0)
         continue; // only look at each 100th (or last) event to speed things up if not selecting digi via tubeName

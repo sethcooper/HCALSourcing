@@ -72,6 +72,7 @@ std::vector<float> reelVals_;
 // tree content
 int treeEventNum_;
 int treeOrbitNum_;
+int treeBx_;
 int treeIndex_;
 int treeMsgCounter_;
 float treeMotorCurrent_;
@@ -468,6 +469,7 @@ int main(int argc, char ** argv)
   cout << "eventTree: found entries = " << eventTree_->GetEntries() << endl;
   eventTree_->SetBranchAddress("eventNum",&treeEventNum_);
   eventTree_->SetBranchAddress("orbitNum",&treeOrbitNum_);
+  eventTree_->SetBranchAddress("bx",&treeBx_);
   eventTree_->SetBranchAddress("index",&treeIndex_);
   eventTree_->SetBranchAddress("msgCounter",&treeMsgCounter_);
   eventTree_->SetBranchAddress("motorCurrent",&treeMotorCurrent_);
@@ -533,6 +535,8 @@ int main(int argc, char ** argv)
   }
 
 
+  outputRootFile->cd();
+  TH1F* eventsPerReelPosHist = new TH1F("eventsPerReelPosHist","eventsPerReelPosHist;mm",700,0,6999);
   int emptyChannels = 0;
   int emptyChannelsHFMQ1Q4FEDs = 0;
   cout << "Running over " << maxEvents_ << " max events." << endl;
@@ -559,14 +563,11 @@ int main(int argc, char ** argv)
       return -2;
     }
 
-    if(evt % 100 == 0) // only do this for each 100th event
-    {
       evtNumbers_.push_back(treeEventNum_);
-      orbitNumberSecs_.push_back(88.9e-6*treeOrbitNum_);
+      orbitNumberSecs_.push_back(88.9e-6*(treeOrbitNum_+treeBx_/3564));
       indexVals_.push_back(treeIndex_);
       motorCurrentVals_.push_back(treeMotorCurrent_);
       reelVals_.push_back(treeReelPos_);
-    }
 
     string tubeName = string(treeTubeName_);
     tubeNameSet.insert(tubeName);
@@ -685,13 +686,14 @@ int main(int argc, char ** argv)
         }
       }
 
-      if(evt % 100 == 0 || evt % 101 == 0 || evt % 102 == 0 || evt % 104 == 0) // only do this for each 100th-ish event
-      {
+      //if(evt % 100 == 0 || evt % 101 == 0 || evt % 102 == 0 || evt % 104 == 0) // only do this for each 100th-ish event
+      //{
         thisHistoData->eventNumbers.push_back(treeEventNum_);
         thisHistoData->reelPositions.push_back(treeReelPos_);
-        thisHistoData->histoAverages.push_back(treeChHistMean_[nCh]);
-        thisHistoData->histoRMSs.push_back(treeChHistRMS_[nCh]);
-      }
+        // compute this from the uneven hists --> SIC Nov8 2013
+        //thisHistoData->histoAverages.push_back(treeChHistMean_[nCh]);
+        //thisHistoData->histoRMSs.push_back(treeChHistRMS_[nCh]);
+      //}
 
       // make hist
       histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
@@ -719,13 +721,24 @@ int main(int argc, char ** argv)
         if(28<ibin) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/5.0);
 
       }
-      
+      // compute this from the uneven hists --> SIC Nov8 2013
+      thisHistoData->histoAverages.push_back(thisChannelUnevenBinsHist->GetMean());
+      thisHistoData->histoRMSs.push_back(thisChannelUnevenBinsHist->GetRMS());
+     
+      if(tubeName=="HFM09_ETA29_PHI17_T14A_SRCTUBE")
+      {
+        eventsPerReelPosHist->Fill(treeReelPos_);
+      } 
       //if(outputRawHistograms_)
       //{
       //  tempHist->Write();
       //}
     }
   }
+
+  outputRootFile->cd();
+  eventsPerReelPosHist->Write();
+
 
   rootInputFile_->Close();
   cout << "Ended loop over events." << endl;

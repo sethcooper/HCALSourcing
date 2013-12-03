@@ -2,16 +2,8 @@ import FWCore.ParameterSet.Config as cms
 
 process = cms.Process("HCALSourceDataMonitor")
 
-#process.load("FWCore.MessageService.MessageLogger_cfi")
-process.MessageLogger = cms.Service("MessageLogger",
-     #suppressInfo = cms.untracked.vstring(),
-     cout = cms.untracked.PSet(
-               threshold = cms.untracked.string('WARNING')
-           ),
-     categories = cms.untracked.vstring('*'),
-     destinations = cms.untracked.vstring('cout')
-)
-
+process.load("FWCore.MessageService.MessageLogger_cfi")
+process.MessageLogger.cerr.FwkReport.reportEvery = 1000
 
 ##-- GT conditions for all
 process.load("Configuration.StandardSequences.FrontierConditions_GlobalTag_cff")
@@ -27,10 +19,11 @@ process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 process.source = cms.Source("HcalTBSource",
     # replace 'myfile.root' with the source file you want to use
     fileNames = cms.untracked.vstring(
-      XXX_FILENAMES_XXX
+XXX_FILENAMES_XXX
     )
 )
 
+# TB data unpacker
 process.tbunpack = cms.EDProducer("HcalTBObjectUnpacker",
     HcalSlowDataFED = cms.untracked.int32(-1),
     HcalSourcePositionFED = cms.untracked.int32(12),
@@ -41,8 +34,14 @@ process.tbunpack = cms.EDProducer("HcalTBObjectUnpacker",
 # histo unpacker
 process.load("EventFilter.HcalRawToDigi.HcalHistogramRawToDigi_cfi")
 process.hcalhistos.HcalFirstFED = cms.untracked.int32(700)
-process.hcalhistos.FEDs = cms.untracked.vint32(718,719,720,721,722,723)
+# H2 FED is 700
+#process.hcalhistos.FEDs = cms.untracked.vint32(700)
+# HFM Q1, Q4: FEDS 718 and 722
+#process.hcalhistos.FEDs = cms.untracked.vint32(718,722)
+# HEM09,10,11 --> FEDs 706 and 708
+process.hcalhistos.FEDs = cms.untracked.vint32(706,708)
 
+# Tree-maker
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
     RootFileName = cms.untracked.string('XXX_TFILENAME_XXX'),
     PrintRawHistograms = cms.untracked.bool(False),

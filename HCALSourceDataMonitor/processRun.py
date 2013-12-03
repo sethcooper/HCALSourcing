@@ -5,6 +5,8 @@ import os
 import sys
 import subprocess
 
+dataDir = ''
+
 
 def GetNewCfgName(runNumber):
   return 'hcalSourceDataMon.'+str(runNumber)+'_cfg.py'
@@ -19,14 +21,20 @@ def GetPlotFileName(runNumber):
   return 'hcalSourceDataMonPlots.'+str(runNumber)+'.root'
 
 def GetFilenames(runNumber):
-  fileList = ''
+  global dataDir
+  fileNames = ''
   oldDir = os.getcwd()
-  os.chdir("/mnt/bigspool/usc")
-  for files in os.listdir("."):
+  os.chdir(dataDir)
+  dirFileList = os.listdir(".")
+  dirFileList.sort()
+  dirFileList.sort(key=len) # put shortest file name (without .1, .2, etc., at beginning)
+  for files in dirFileList:
     if files.endswith(".root") and str(runNumber) in files:
-      fileList+=("'file:/mnt/bigspool/usc/"+files+"',\n")
+      fileNames+=("      'file:"+dataDir+"/"+files+"',\n")
   os.chdir(oldDir)
-  return fileList
+  print 'using files:'
+  print fileNames
+  return fileNames
 
 
 def CreateNTupleConfigFile(runNumber):
@@ -68,25 +76,18 @@ def CreateCfgs(runNumber):
 
 # RUN
 runsList = [
-215590,
-215594,
-215595,    
-215596,    
-215597,  
-215600,  
-215602,    
-215604,    
-215607,    
-215631,    
-215632,
-215659,    
-215637,    
-215649,
+    215637
 ]
+
+#dataDir = "/data2/scooper/Sourcing/P5_Tests_JustBefore_October2013HFM"
+#dataDir = "/data2/scooper/Sourcing/AfterOctoberHFM_Tests"
+dataDir = "/data2/scooper/Sourcing/October_HFM_Q1_Q4"
+#dataDir = "/mnt/bigspool/usc"
 
 for run in runsList:
   print 'Run number:',run
   CreateCfgs(run)
+  print 'cmsRun',GetNewCfgName(run),'from:',os.getcwd()+'/'+str(run)
   proc = subprocess.Popen(['cmsRun',GetNewCfgName(run)],cwd=os.getcwd()+'/'+str(run),stdout=subprocess.PIPE,stderr=subprocess.PIPE)
   out,err = proc.communicate()
   print out

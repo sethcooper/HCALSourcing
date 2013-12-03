@@ -80,14 +80,18 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       // ----------member data ---------------------------
       std::string rootFileName_;
       bool printRawHistograms_;
+      bool checkIntegrals_;
       bool selectDigiBasedOnTubeName_;
       int naiveEvtNum_;
       TFile* rootFile_;
+      TH1F* histEntries_;
+      TH1F* histEntriesByCapId_[4];
       TTree* eventTree_;
       std::set<HcalDetId> emptyHistogramChannelsSet;
       // tree content
       int treeEventNum_;
       int treeOrbitNum_;
+      int treeBx_;
       int treeIndex_;
       int treeMsgCounter_;
       float treeMotorCurrent_;
@@ -115,6 +119,13 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
 // static data member definitions
 //
 
+std::string intToString(int num)
+{
+    using namespace std;
+    ostringstream myStream;
+    myStream << num << flush;
+    return (myStream.str ());
+}
 
 //
 // constructors and destructor
@@ -122,15 +133,21 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
 HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
   rootFileName_ (iConfig.getUntrackedParameter<std::string>("RootFileName","hcalSourceDataMon.root")),
   printRawHistograms_ (iConfig.getUntrackedParameter<bool>("PrintRawHistograms",false)),
+  checkIntegrals_ (iConfig.getUntrackedParameter<bool>("CheckHistogramIntegrals",false)),
   selectDigiBasedOnTubeName_ (iConfig.getUntrackedParameter<bool>("SelectDigiBasedOnTubeName",true))
 {
   //now do what ever initialization is needed
   naiveEvtNum_ = 0;
   rootFile_ = new TFile(rootFileName_.c_str(),"recreate");
   rootFile_->cd();
+  histEntries_ = new TH1F("histTotalEntries","Total Histogram Entries",2000,64000,66000);
+  for(int i=0;i<4;++i)
+    histEntriesByCapId_[i] = new TH1F(("histTotalEntriesCapID"+intToString(i)).c_str(),("Total Histogram Entries Cap ID "+intToString(i)).c_str(),2000,64000,66000);
+  
   eventTree_ = new TTree("eventTree","Event data");
   eventTree_->Branch("eventNum",&treeEventNum_);
   eventTree_->Branch("orbitNum",&treeOrbitNum_);
+  eventTree_->Branch("bx",&treeBx_);
   eventTree_->Branch("index",&treeIndex_);
   eventTree_->Branch("msgCounter",&treeMsgCounter_);
   eventTree_->Branch("motorCurrent",&treeMotorCurrent_);
@@ -170,6 +187,8 @@ bool HCALSourceDataMonitor::isDigiAssociatedToSourceTube(const HcalDetId& detId,
   using namespace std;
   int ieta = detId.ieta();
   int iphi = detId.iphi();
+  int ietaAbs = detId.ietaAbs();
+  int depth = detId.depth();
   //"H2_HB_PHI11_LAYER0_SRCTUBE" // example tube for H2
   //"HFM01_ETA29_PHI55_T1A_SRCTUBE" // example tube for HF/P5
   //"H2_FAKETEST_1_PHI57" // fake H2 tube
@@ -179,10 +198,27 @@ bool HCALSourceDataMonitor::isDigiAssociatedToSourceTube(const HcalDetId& detId,
     // for HB, tubes go along eta (constant phi)-->keep all eta/depth for specific iphi
     if(tubePhi==iphi)
       return true;
-    // TESTING
-    //if(iphi==12)
-    //  return true;
-    // TESTING
+  }
+  else if(tubeName.find("HE") != string::npos)
+  {
+    // for HE, tubes go along eta
+    // for odd and even tube phis, keep all eta/phi/depth at same phi as tube
+    if(tubePhi==iphi)
+      return true;
+    // for even tube phis, also keep lower odd phi channels at high eta
+    else if(tubePhi%2==0 && (tubePhi-1)==iphi)
+    {
+      if(depth==1 || depth==2)
+      {
+        if(ietaAbs > 20)
+          return true;
+      }
+      else if(depth==3)
+      {
+        if(ietaAbs==27 || ietaAbs==28)
+          return true;
+      }
+    }
   }
   else if(tubeName.find("HFM") != string::npos)
   {
@@ -266,6 +302,7 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   int eventNum = iEvent.id().event();
   treeEventNum_ = eventNum;
   treeOrbitNum_ = triggerData->orbitNumber();
+  treeBx_ = triggerData->bunchNumber();
   treeIndex_ = spd->indexCounter();
   treeMsgCounter_ = spd->messageCounter();
   treeMotorCurrent_ = spd->motorCurrent();
@@ -275,6 +312,10 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   treeTriggerTimestamp_ = trigtimebase;
   treeTimestamp1_ = timebase;
   strcpy(treeTubeName_,tubeName.c_str());
+
+  //
+  //cout << "Event: " << eventNum << endl;
+  //cout << "Source position info looks like: " << *spd << endl;
 
   vector<Handle<HcalHistogramDigiCollection> > hcalHistDigiCollHandleVec;
   iEvent.getManyByType(hcalHistDigiCollHandleVec);
@@ -307,6 +348,9 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       int binValSum = 0;
       int binValSqrSum = 0;
       int nEntries = 0;
+      int nEntriesPerCap[4];
+      for(int i=0; i<4; ++i)
+        nEntriesPerCap[i] = 0;
       // loop over histogram bins
       for(int ib = 0; ib < 32; ib++)
       {
@@ -314,6 +358,10 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
         treeChHistBinContentCap1_[nChInEvent][ib] = idigi->get(1,ib); 
         treeChHistBinContentCap2_[nChInEvent][ib] = idigi->get(2,ib); 
         treeChHistBinContentCap3_[nChInEvent][ib] = idigi->get(3,ib); 
+        nEntriesPerCap[0]+=treeChHistBinContentCap0_[nChInEvent][ib];
+        nEntriesPerCap[1]+=treeChHistBinContentCap1_[nChInEvent][ib]; 
+        nEntriesPerCap[2]+=treeChHistBinContentCap2_[nChInEvent][ib]; 
+        nEntriesPerCap[3]+=treeChHistBinContentCap3_[nChInEvent][ib]; 
         if(ib > 30) continue; // don't compute avg/rms using overflow bin
         binValSum+=ib*treeChHistBinContentCap0_[nChInEvent][ib];
         binValSum+=ib*treeChHistBinContentCap1_[nChInEvent][ib];
@@ -330,6 +378,13 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       }
       treeChHistMean_[nChInEvent] = nEntries > 0 ? binValSum/(float)nEntries : 0;
       treeChHistRMS_[nChInEvent] = nEntries > 0 ? sqrt(binValSqrSum/(float)nEntries - treeChHistMean_[nChInEvent]*treeChHistMean_[nChInEvent]) : 0;
+      rootFile_->cd();
+      for(int i=0; i<4; ++i)
+      {
+        histEntries_->Fill(nEntriesPerCap[i]);
+        histEntriesByCapId_[i]->Fill(nEntriesPerCap[i]);
+      }
+
       if(nEntries <= 30000)
       {
         emptyHistogramChannelsSet.insert(detId);
@@ -346,7 +401,12 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
       }
 
       // used for looking at and saving raw hists
-      if(printRawHistograms_)
+      if(printRawHistograms_ || 
+          (checkIntegrals_ &&
+           ((fabs(nEntriesPerCap[0]-64100)>100 && nEntriesPerCap[0] > 0) ||
+          (fabs(nEntriesPerCap[1]-64100)>100 && nEntriesPerCap[1] > 0) ||
+          (fabs(nEntriesPerCap[2]-64100)>100 && nEntriesPerCap[2] > 0) ||
+          (fabs(nEntriesPerCap[3]-64100)>100 && nEntriesPerCap[3] > 0))))
       {
         const HcalElectronicsMap* readoutMap = pSetup->getHcalMapping();
         HcalElectronicsId eid = readoutMap->lookup(detId);
@@ -354,9 +414,13 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
         int iphi = detId.iphi();
         int depth = detId.depth();
         cout << "event: " << eventNum << endl;
+        cout << "activeTubeName: " << tubeName << endl;
         cout << "electronicsID: " << eid << endl;
         cout << "iEta: "<< ieta << " iPhi: " << iphi << " Depth: " << depth << endl; 
-        cout << *idigi << endl;
+        cout << *idigi;
+        cout << " ----------------------------------" << endl;
+        cout << " Sum  ";
+        cout << nEntriesPerCap[0] << "   " << nEntriesPerCap[1] << "   " << nEntriesPerCap[2] << "   " << nEntriesPerCap[3] << endl;
       }
 
       nChInEvent++;
@@ -385,6 +449,9 @@ HCALSourceDataMonitor::endJob()
 {
   rootFile_->cd();
   eventTree_->Write();
+  histEntries_->Write();
+  for(int i=0;i<4;++i)
+    histEntriesByCapId_[i]->Write();
   rootFile_->Close();
 
   std::cout << "The following " << emptyHistogramChannelsSet.size() << " channels had at least one empty histogram:" << std::endl;

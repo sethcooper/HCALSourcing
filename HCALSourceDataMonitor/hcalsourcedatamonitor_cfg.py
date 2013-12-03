@@ -2,15 +2,16 @@ import FWCore.ParameterSet.Config as cms
 
 process = cms.Process("HCALSourceDataMonitor")
 
-#process.load("FWCore.MessageService.MessageLogger_cfi")
-process.MessageLogger = cms.Service("MessageLogger",
-     #suppressInfo = cms.untracked.vstring(),
-     cout = cms.untracked.PSet(
-               threshold = cms.untracked.string('WARNING')
-           ),
-     categories = cms.untracked.vstring('*'),
-     destinations = cms.untracked.vstring('cout')
-)
+process.load("FWCore.MessageService.MessageLogger_cfi")
+#process.MessageLogger = cms.Service("MessageLogger",
+#     #suppressInfo = cms.untracked.vstring(),
+#     cout = cms.untracked.PSet(
+#               threshold = cms.untracked.string('WARNING')
+#           ),
+#     categories = cms.untracked.vstring('*'),
+#     destinations = cms.untracked.vstring('cout')
+#)
+process.MessageLogger.cerr.FwkReport.reportEvery = 1000
 
 
 ##-- GT conditions for all
@@ -20,25 +21,30 @@ process.GlobalTag.globaltag = autoCond['com10'] ## == GR_R_53_V16::All in 5_3_7
 ###-- Customized particular conditions
 from CondCore.DBCommon.CondDBSetup_cfi import *
 
+# EMAP NEEDED FOR H2 DATA
+##----------------------------------- replacing conditions with txt ones
+#process.es_ascii = cms.ESSource("HcalTextCalibrations",
+#    input = cms.VPSet(
+#      cms.PSet(
+#        object = cms.string('ElectronicsMap'),
+#        file = cms.FileInPath('HCALSourcing/HCALSourceDataMonitor/emap_HCAL_H2_BI_modSIC_nov2013.txt')
+#        )
+#      )
+#    )
+#process.es_prefer = cms.ESPrefer('HcalTextCalibrations','es_ascii')
+
 
 process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(-1) )
 #process.maxEvents = cms.untracked.PSet( input = cms.untracked.int32(100) )
 
+# input files
 process.source = cms.Source("HcalTBSource",
-    # replace 'myfile.root' with the source file you want to use
     fileNames = cms.untracked.vstring(
         'file:/afs/cern.ch/user/s/scooper/work/private/cmssw/HCALSourcingWork/src/HCALSourcing/HCALSourceDataMonitor/USC_215595.root'
     )
 )
 
 # TB data unpacker
-#process.load('RecoTBCalo.HcalTBObjectUnpacker.HcalTBObjectUnpacker_SourceCal_cfi')
-#process.tbunpack = cms.EDProducer("HcalTBObjectUnpacker",
-#    HcalSlowDataFED = cms.untracked.int32(12),
-#    HcalSourcePositionFED = cms.untracked.int32(-1),
-#    HcalTriggerFED = cms.untracked.int32(1)
-#)
-
 process.tbunpack = cms.EDProducer("HcalTBObjectUnpacker",
     HcalSlowDataFED = cms.untracked.int32(-1),
     HcalSourcePositionFED = cms.untracked.int32(12),
@@ -49,14 +55,14 @@ process.tbunpack = cms.EDProducer("HcalTBObjectUnpacker",
 # histo unpacker
 process.load("EventFilter.HcalRawToDigi.HcalHistogramRawToDigi_cfi")
 process.hcalhistos.HcalFirstFED = cms.untracked.int32(700)
+# H2 FED is 700
 #process.hcalhistos.FEDs = cms.untracked.vint32(700)
+# HFM Q1, Q4: FEDS 718 and 722
 #process.hcalhistos.FEDs = cms.untracked.vint32(718,722)
-process.hcalhistos.FEDs = cms.untracked.vint32(718,719,720,721,722,723)
+# HEM09,10,11 --> FEDs 706 and 708
+process.hcalhistos.FEDs = cms.untracked.vint32(706,708)
 
-#process.TFileService = cms.Service("TFileService", 
-#    fileName = cms.string("hcalFWAnalyzer.6096.SDMovingH2.Apr9.newEmap.root"),
-#)
-
+# Tree-maker
 process.hcalSourceDataMon = cms.EDAnalyzer('HCALSourceDataMonitor',
     RootFileName = cms.untracked.string('hcalSourceDataMon.test.215595.root'),
     PrintRawHistograms = cms.untracked.bool(False),

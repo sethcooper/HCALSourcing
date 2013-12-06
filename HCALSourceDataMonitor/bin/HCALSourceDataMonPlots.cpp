@@ -59,10 +59,8 @@ bool selectDigiBasedOnTubeName_;
 int maxEvents_;
 TFile* rootInputFile_;
 TFile* rootOutputFile_;
-TH2F* firstEventHistMeanMapsHFM[2];
-TH2F* firstEventHistMeanMapsHFP[2];
-TH2F* firstEventHistRMSMapsHFM[2];
-TH2F* firstEventHistRMSMapsHFP[2];
+TH2F* firstEventHistMeanMaps[3];
+TH2F* firstEventHistRMSMaps[3];
 TTree* eventTree_;
 std::vector<float> evtNumbers_;
 std::vector<float> orbitNumberSecs_;
@@ -205,26 +203,48 @@ bool isDigiAssociatedToSourceTube(const HcalDetId& detId, std::string tubeName)
   using namespace std;
   int ieta = detId.ieta();
   int iphi = detId.iphi();
+  int depth = detId.depth();
+  int ietaAbs = detId.ietaAbs();
   //"H2_HB_PHI11_LAYER0_SRCTUBE" // example tube for H2
   //"HFM01_ETA29_PHI55_T1A_SRCTUBE" // example tube for HF/P5
   //"H2_FAKETEST_1_PHI57" // fake H2 tube
   int tubePhi = atof(tubeName.substr(tubeName.find("PHI")+3,tubeName.find("_LAYER")-1).c_str());
   if(tubeName.find("HB") != string::npos)
   {
+    if(detId.subdet() != HcalBarrel)
+      return false;
     // for HB, tubes go along eta (constant phi)-->keep all eta/depth for specific iphi
     if(tubePhi==iphi)
       return true;
-    // TESTING
-    //if(iphi==12)
-    //  return true;
-    // TESTING
+  }
+  else if(tubeName.find("HE") != string::npos)
+  {
+    if(detId.subdet() != HcalEndcap)
+      return false;
+    // for HE, tubes go along eta
+    // for odd and even tube phis, keep all eta/phi/depth at same phi as tube
+    if(tubePhi==iphi)
+      return true;
+    // for even tube phis, also keep lower odd phi channels at high eta
+    else if(tubePhi%2==0 && (tubePhi-1)==iphi)
+    {
+      if(depth==1 || depth==2)
+      {
+        if(ietaAbs > 20)
+          return true;
+      }
+      else if(depth==3)
+      {
+        if(ietaAbs==27 || ietaAbs==28)
+          return true;
+      }
+    }
   }
   else if(tubeName.find("HFM") != string::npos)
   {
     // for HF, tubes go into one tower (require same eta,phi)
     int tubeEta = atof(tubeName.substr(tubeName.find("ETA")+3,tubeName.find("_PHI")-1).c_str());
     int tubePhi = atof(tubeName.substr(tubeName.find("PHI")+3,tubeName.find("_T")-1).c_str());
-    //cout << "tubeEta=" << tubeEta << "tubePhi=" << tubePhi << " chEta: " << ieta << " chPhi: " << iphi << endl;
     ieta = fabs(ieta);
     if(tubeEta==ieta && tubePhi==iphi)
       return true;
@@ -372,41 +392,33 @@ void finishHtml(std::set<std::string> tubeNameSet)
     htmlFile << "<hr>\n";
     htmlFile << "<h2>Mean/RMS Maps</h2>\n";
     int mapThumbSize = 500;
-    if(firstEventHistMeanMapsHFM[0]->GetEntries() > 0)
-      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFM[0]->GetName() << ".png"
-        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFM[0]->GetName()
+    if(firstEventHistMeanMaps[0]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMaps[0]->GetName() << ".png"
+        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMaps[0]->GetName()
         << ".png" << "\"></a>\n";
-    if(firstEventHistMeanMapsHFM[1]->GetEntries() > 0)
-      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFM[1]->GetName() << ".png"
-        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFM[1]->GetName()
-        << ".png" << "\"></a>\n";
-    htmlFile << "<br>\n";
-    if(firstEventHistMeanMapsHFP[0]->GetEntries() > 0)
-      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFP[0]->GetName() << ".png"
-        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFP[0]->GetName()
-        << ".png" << "\"></a>\n";
-    if(firstEventHistMeanMapsHFP[1]->GetEntries() > 0)
-      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFP[1]->GetName() << ".png"
-        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMapsHFP[1]->GetName()
+    if(firstEventHistMeanMaps[1]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMaps[1]->GetName() << ".png"
+        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMaps[1]->GetName()
         << ".png" << "\"></a>\n";
     htmlFile << "<br>\n";
-    if(firstEventHistRMSMapsHFM[0]->GetEntries() > 0)
-      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFM[0]->GetName() << ".png"
-        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFM[0]->GetName()
-        << ".png" << "\"></a>\n";
-    if(firstEventHistRMSMapsHFM[1]->GetEntries() > 0)
-      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFM[1]->GetName() << ".png"
-        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFM[1]->GetName()
+    if(firstEventHistMeanMaps[2]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMaps[2]->GetName() << ".png"
+        << "\"><img width=" << thumbnailSize_ << " src=\"" << plotsDirName_ <<  "/" << firstEventHistMeanMaps[2]->GetName()
         << ".png" << "\"></a>\n";
     htmlFile << "<br>\n";
-    if(firstEventHistRMSMapsHFP[0]->GetEntries() > 0)
-      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFP[0]->GetName() << ".png"
-        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFP[0]->GetName()
+    if(firstEventHistRMSMaps[0]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMaps[0]->GetName() << ".png"
+        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMaps[0]->GetName()
         << ".png" << "\"></a>\n";
-    if(firstEventHistRMSMapsHFP[1]->GetEntries() > 0)
-      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFP[1]->GetName() << ".png"
-        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMapsHFP[1]->GetName()
+    if(firstEventHistRMSMaps[1]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMaps[1]->GetName() << ".png"
+        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMaps[1]->GetName()
         << ".png" << "\"></a>\n";
+    if(firstEventHistRMSMaps[2]->GetEntries() > 0)
+      htmlFile << "<a href=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMaps[2]->GetName() << ".png"
+        << "\"><img width=" << mapThumbSize << " src=\"" << plotsDirName_ <<  "/" << firstEventHistRMSMaps[2]->GetName()
+        << ".png" << "\"></a>\n";
+    htmlFile << "<br>\n";
     htmlFile << "<br>\n";
     htmlFile << "<hr>\n";
     htmlFile << "<a href=\"" << rootOutputFileName_ << "\">Download Root file</a>\n";
@@ -500,19 +512,19 @@ int main(int argc, char ** argv)
   set<string> garageHistUnevenNameSet;
   set<string> absorberHistUnevenNameSet;
   set<string> tubeNameSet;
-  //vector<RawHistoData> rawHistoDataVec_;
+  set<HcalDetId> emptyChannels;
+  map<HcalDetId, float> firstEventHistMeanValsMap;
+  map<HcalDetId, float> firstEventHistRMSValsMap;
+  map<string, set<int> > tubeNameToAssociatedChannelDenseIndexMap;
   TFile* outputRootFile = new TFile(rootOutputFileName_.c_str(),"recreate");
   outputRootFile->cd();
-  TH1F* tempHist = new TH1F("tempHist","tempHist",32,0,31);
-  firstEventHistMeanMapsHFM[0] = new TH2F("firstEventHistMeanMapHFMDepth1","histMean HFM d1;i#eta;i#phi",13,-41,-28,36,1,73);
-  firstEventHistRMSMapsHFM[0] = new TH2F("firstEventHistRMSMapHFMDepth1","histRMS HFM d1;i#eta;i#phi",13,-41,-28,36,1,73);
-  firstEventHistMeanMapsHFP[0] = new TH2F("firstEventHistMeanMapHFPDepth1","histMean HFP d1;i#eta;i#phi",13,29,42,36,1,73);
-  firstEventHistRMSMapsHFP[0] = new TH2F("firstEventHistRMSMapHFPDepth1","histRMS HFP d1;i#eta;i#phi",13,29,42,36,1,73);
-  firstEventHistMeanMapsHFM[1] = new TH2F("firstEventHistMeanMapHFMDepth2","histMean HFM d2;i#eta;i#phi",13,-41,-28,36,1,73);
-  firstEventHistRMSMapsHFM[1] = new TH2F("firstEventHistRMSMapHFMDepth2","histRMS HFM d2;i#eta;i#phi",13,-41,-28,36,1,73);
-  firstEventHistMeanMapsHFP[1] = new TH2F("firstEventHistMeanMapHFPDepth2","histMean HFP d2;i#eta;i#phi",13,29,42,36,1,73);
-  firstEventHistRMSMapsHFP[1] = new TH2F("firstEventHistRMSMapHFPDepth2","histRMS HFP d2;i#eta;i#phi",13,29,42,36,1,73);
-  set<uint32_t> denseIndexAlreadyInMeanRMSMaps;
+  firstEventHistMeanMaps[0] = new TH2F("firstEventHistMeanMapDepth1","histMean  d1;i#eta;i#phi",85,-42.5,42.5,72,0.5,72.5);
+  firstEventHistRMSMaps[0] = new TH2F("firstEventHistRMSMapDepth1","histRMS  d1;i#eta;i#phi",85,-42.5,42.5,72,0.5,72.5);
+  firstEventHistMeanMaps[1] = new TH2F("firstEventHistMeanMapDepth2","histMean  d2;i#eta;i#phi",85,-42.5,42.5,72,0.5,72.5);
+  firstEventHistRMSMaps[1] = new TH2F("firstEventHistRMSMapDepth2","histRMS  d2;i#eta;i#phi",85,-42.5,42.5,72,0.5,72.5);
+  firstEventHistMeanMaps[2] = new TH2F("firstEventHistMeanMapDepth3","histMean  d3;i#eta;i#phi",85,-42.5,42.5,72,0.5,72.5);
+  firstEventHistRMSMaps[2] = new TH2F("firstEventHistRMSMapDepth3","histRMS  d3;i#eta;i#phi",85,-42.5,42.5,72,0.5,72.5);
+  TH1F* firstEventHistMeanDistHEM = new TH1F("firstEventHistMeanHEM","histMean HEM",640,0,31);
 
   int NHbins = 32;
   float binsArray[33]  =   {0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0,
@@ -535,11 +547,14 @@ int main(int argc, char ** argv)
   }
 
 
-  outputRootFile->cd();
-  TH1F* eventsPerReelPosHist = new TH1F("eventsPerReelPosHist","eventsPerReelPosHist;mm",700,0,6999);
-  int emptyChannels = 0;
-  int emptyChannelsHFMQ1Q4FEDs = 0;
-  cout << "Running over " << maxEvents_ << " max events." << endl;
+  // disable branches
+  eventTree_->SetBranchStatus("*",0);
+  eventTree_->SetBranchStatus("tubeName",1);
+  eventTree_->SetBranchStatus("chDenseIndex",1);
+  eventTree_->SetBranchStatus("nChInEvent",1);
+  eventTree_->SetBranchStatus("chHistMean",1);
+  eventTree_->SetBranchStatus("chHistRMS",1);
+  cout << "Running over all events in tree" << endl;
   // loop over tree
   int nevents = eventTree_->GetEntries();
   cout << "Beginning loop over events --> found " << nevents << " events." << endl;
@@ -548,14 +563,6 @@ int main(int argc, char ** argv)
     if((evt+1) > maxEvents_)
       break;
 
-    if(evt % 1000 == 0)
-      cout << "Loop: event " << evt << endl;
-    else if((evt+2) > maxEvents_)
-      cout << "Loop (last): event " << evt << endl;
-    else if(!selectDigiBasedOnTubeName_)
-      if(evt % 100 != 0)
-        continue; // only look at each 100th (or last) event to speed things up if not selecting digi via tubeName
-
     eventTree_->GetEntry(evt);
     if(treeNChInEvent_ > MAXCHPEREVENT)
     {
@@ -563,378 +570,287 @@ int main(int argc, char ** argv)
       return -2;
     }
 
-      evtNumbers_.push_back(treeEventNum_);
-      orbitNumberSecs_.push_back(88.9e-6*(treeOrbitNum_+treeBx_/3564));
-      indexVals_.push_back(treeIndex_);
-      motorCurrentVals_.push_back(treeMotorCurrent_);
-      reelVals_.push_back(treeReelPos_);
-
     string tubeName = string(treeTubeName_);
     tubeNameSet.insert(tubeName);
 
-    outputRootFile->cd();
-    if(outputRawHistograms_)
+
+    if(evt < 100)
     {
-      TDirectory* tubeDir = (TDirectory*) outputRootFile->GetDirectory(tubeName.c_str());
-      if(!tubeDir)
-        tubeDir = outputRootFile->mkdir(tubeName.c_str());
-      string blockDirName = getBlockEventDirName(treeEventNum_);
-      string blockDirPath = tubeName;
-      blockDirPath+="/";
-      blockDirPath+=blockDirName;
-      TDirectory* blockEventDir = (TDirectory*) outputRootFile->GetDirectory(blockDirPath.c_str());
-      if(!blockEventDir)
-        blockEventDir = tubeDir->mkdir(blockDirName.c_str());
-      string directoryName = "event";
-      directoryName+=intToString(treeEventNum_);
-      string dirPath = blockDirPath;
-      dirPath+="/";
-      dirPath+=directoryName;
-      TDirectory* subDir = (TDirectory*) outputRootFile->GetDirectory(dirPath.c_str());
-      if(!subDir)
-        subDir = blockEventDir->mkdir(directoryName.c_str());
-      subDir->cd();
-    }
-
-    // loop over channels in event
-    for(int nCh = 0; nCh < treeNChInEvent_; ++nCh)
-    {
-      HcalDetId detId = HcalDetId::detIdFromDenseIndex(treeChDenseIndex_[nCh]);
-      //if(find(denseIndexAlreadyInMeanRMSMaps.begin(),denseIndexAlreadyInMeanRMSMaps.end(),treeChDenseIndex_[nCh])
-      //    == denseIndexAlreadyInMeanRMSMaps.end())
-      //{
-      //  if(treeChHistMean_[nCh] == 0)
-      //  {
-      //    if(detId.zside() < 0) // && (detId.iphi() > 55 || detId.iphi() < 19) )
-      //    {
-      //      cout << "ERROR: HF- detId: " << detId << " hist mean=0" << endl;
-      //      ++emptyChannelsHFMQ1Q4FEDs;
-      //    }
-      //    ++emptyChannels;
-      //  }
-      //  else if(detId.subdet() == HcalForward && detId.zside() < 0)
-      //  {
-      //    firstEventHistMeanMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistMean_[nCh]);
-      //    firstEventHistRMSMapsHFM[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistRMS_[nCh]);
-      //  }
-      //  else if(detId.subdet() == HcalForward && detId.zside() > 0)
-      //  {
-      //    firstEventHistMeanMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistMean_[nCh]);
-      //    firstEventHistRMSMapsHFP[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),treeChHistRMS_[nCh]);
-      //  }
-      //  denseIndexAlreadyInMeanRMSMaps.insert(treeChDenseIndex_[nCh]);
-      //}
-
-      if(selectDigiBasedOnTubeName_)
-        if(!isDigiAssociatedToSourceTube(detId,tubeName))
-          continue;
-
-      //cout << "Associated this channel: " << detId << " with tube " << tubeName << endl;
-      RawHistoData* thisHistoData = rawHistoDataMap.insert(make_pair(make_pair(tubeName,detId), new RawHistoData(tubeName,detId,50000))).first->second;
-      TH1F* thisChannelHist = 0;
-      TH1F* thisChannelUnevenBinsHist = 0;
-      string histName = "hist_Ieta";
-      histName+=intToString(detId.ieta());
-      histName+="_Iphi";
-      histName+=intToString(detId.iphi());
-      histName+="_Depth";
-      histName+=intToString(detId.depth());
-      histName+="_";
-      histName+=tubeName;
-      string histNameUneven = histName;
-      histNameUneven+="_uneven";
-      if(fabs(treeReelPos_) < 5)
+      // loop over channels in event
+      for(int nCh = 0; nCh < treeNChInEvent_; ++nCh)
       {
-        histName+="_sourceInGarage";
-        //thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
-        //if(!thisChannelHist)
-        //{
-        //  thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
-        //  thisChannelHist->Sumw2();
-        //  garageHistNameSet.insert(histName);
-        //}
-        histNameUneven+="_sourceInGarage";
-        thisChannelUnevenBinsHist = (TH1F*)gDirectory->GetList()->FindObject(histNameUneven.c_str());
-        if(!thisChannelUnevenBinsHist)
+        HcalDetId detId = HcalDetId::detIdFromDenseIndex(treeChDenseIndex_[nCh]);
+        if(firstEventHistMeanValsMap[detId] == 0)
         {
-          string histTitleUneven = histNameUneven;
-          histTitleUneven+=";linearized QIE counts";
-          thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histTitleUneven.c_str(),NHbins,binsArray);
-          thisChannelUnevenBinsHist->Sumw2();
-          garageHistUnevenNameSet.insert(histNameUneven);
+          firstEventHistMeanValsMap[detId] = treeChHistMean_[nCh];
+          firstEventHistRMSValsMap[detId] = treeChHistRMS_[nCh];
         }
       }
-      else if(treeDriverStatus_ & in_detector_mask)
-      {
-        histName+="_sourceInAbsorber";
-        //thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
-        //if(!thisChannelHist)
-        //{
-        //  thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
-        //  thisChannelHist->Sumw2();
-        //  absorberHistNameSet.insert(histName);
-        //}
-        histNameUneven+="_sourceInAbsorber";
-        thisChannelUnevenBinsHist = (TH1F*)gDirectory->GetList()->FindObject(histNameUneven.c_str());
-        if(!thisChannelUnevenBinsHist)
-        {
-          string histTitleUneven = histNameUneven;
-          histTitleUneven+=";linearized QIE counts";
-          thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histTitleUneven.c_str(),NHbins,binsArray);
-          thisChannelUnevenBinsHist->Sumw2();
-          absorberHistUnevenNameSet.insert(histNameUneven);
-        }
-      }
-
-      //if(evt % 100 == 0 || evt % 101 == 0 || evt % 102 == 0 || evt % 104 == 0) // only do this for each 100th-ish event
-      //{
-        thisHistoData->eventNumbers.push_back(treeEventNum_);
-        thisHistoData->reelPositions.push_back(treeReelPos_);
-        // compute this from the uneven hists --> SIC Nov8 2013
-        //thisHistoData->histoAverages.push_back(treeChHistMean_[nCh]);
-        //thisHistoData->histoRMSs.push_back(treeChHistRMS_[nCh]);
-      //}
-
-      // make hist
-      histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
-      tempHist->Reset();
-      tempHist->SetNameTitle(histName.c_str(),histName.c_str());
-      for(int ibin=0; ibin<32; ibin++)
-      {
-        float binValSum = treeChHistBinContentCap0_[nCh][ibin];
-        binValSum+=treeChHistBinContentCap1_[nCh][ibin];
-        binValSum+=treeChHistBinContentCap2_[nCh][ibin];
-        binValSum+=treeChHistBinContentCap3_[nCh][ibin];
-        //for(int content = 0; content < binValSum; ++content)
-        //{
-        //  tempHist->Fill(ibin);
-        //  //if(thisChannelHist != 0)
-        //  //{
-        //  //  thisChannelHist->Fill(ibin);
-        //  //}
-        //}
-
-        if(ibin < 15) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum);
-        if(14<ibin && ibin<22) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/2.0);
-        if(21<ibin && ibin<26) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/3.0);
-        if(25<ibin && ibin<29) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/4.0);
-        if(28<ibin) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/5.0);
-
-      }
-      // compute this from the uneven hists --> SIC Nov8 2013
-      thisHistoData->histoAverages.push_back(thisChannelUnevenBinsHist->GetMean());
-      thisHistoData->histoRMSs.push_back(thisChannelUnevenBinsHist->GetRMS());
-     
-      if(tubeName=="HFM09_ETA29_PHI17_T14A_SRCTUBE")
-      {
-        eventsPerReelPosHist->Fill(treeReelPos_);
-      } 
-      //if(outputRawHistograms_)
-      //{
-      //  tempHist->Write();
-      //}
     }
+
+//
+//    //// loop over channels in event
+//    //for(int nCh = 0; nCh < treeNChInEvent_; ++nCh)
+//    //{
+//    //  HcalDetId detId = HcalDetId::detIdFromDenseIndex(treeChDenseIndex_[nCh]);
+//
+//    //  if(selectDigiBasedOnTubeName_)
+//    //    if(!isDigiAssociatedToSourceTube(detId,tubeName))
+//    //      continue;
+//
+//    //  outputRootFile->cd();
+//  ////    RawHistoData* thisHistoData = rawHistoDataMap.insert(make_pair(make_pair(tubeName,detId), new RawHistoData(tubeName,detId,50000))).first->second;
+//    //  TH1F* thisChannelHist = 0;
+//    //  TH1F* thisChannelUnevenBinsHist = 0;
+//    //  string histName = "hist_Ieta";
+//    //  histName+=intToString(detId.ieta());
+//    //  histName+="_Iphi";
+//    //  histName+=intToString(detId.iphi());
+//    //  histName+="_Depth";
+//    //  histName+=intToString(detId.depth());
+//    //  histName+="_";
+//    //  histName+=tubeName;
+//    //  string histNameUneven = histName;
+//    //  histNameUneven+="_uneven";
+//    //  if(fabs(treeReelPos_) < 5)
+//    //  {
+//    //    histName+="_sourceInGarage";
+//    //    //thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
+//    //    //if(!thisChannelHist)
+//    //    //{
+//    //    //  thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
+//    //    //  thisChannelHist->Sumw2();
+//    //    //  garageHistNameSet.insert(histName);
+//    //    //}
+//    //    histNameUneven+="_sourceInGarage";
+//    //    //thisChannelUnevenBinsHist = (TH1F*)gDirectory->GetList()->FindObject(histNameUneven.c_str());
+//    //    //if(!thisChannelUnevenBinsHist)
+//    //    //{
+//    //    //  string histTitleUneven = histNameUneven;
+//    //    //  histTitleUneven+=";linearized QIE counts";
+//    //    //  thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histTitleUneven.c_str(),NHbins,binsArray);
+//    //    //  thisChannelUnevenBinsHist->Sumw2();
+//    //    //  garageHistUnevenNameSet.insert(histNameUneven);
+//    //    //}
+//    //  }
+//    //  else if(treeDriverStatus_ & in_detector_mask)
+//    //  {
+//    //    histName+="_sourceInAbsorber";
+//    //    //thisChannelHist = (TH1F*)gDirectory->GetList()->FindObject(histName.c_str());
+//    //    //if(!thisChannelHist)
+//    //    //{
+//    //    //  thisChannelHist = new TH1F(histName.c_str(),histName.c_str(),33,0,32);
+//    //    //  thisChannelHist->Sumw2();
+//    //    //  absorberHistNameSet.insert(histName);
+//    //    //}
+//    //    histNameUneven+="_sourceInAbsorber";
+//    //    //thisChannelUnevenBinsHist = (TH1F*)gDirectory->GetList()->FindObject(histNameUneven.c_str());
+//    //    //if(!thisChannelUnevenBinsHist)
+//    //    //{
+//    //    //  string histTitleUneven = histNameUneven;
+//    //    //  histTitleUneven+=";linearized QIE counts";
+//    //    //  thisChannelUnevenBinsHist = new TH1F(histNameUneven.c_str(),histTitleUneven.c_str(),NHbins,binsArray);
+//    //    //  thisChannelUnevenBinsHist->Sumw2();
+//    //    //  absorberHistUnevenNameSet.insert(histNameUneven);
+//    //    //}
+//    //  }
+//
+//    //  // make hist
+//    //  histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
+//    //  tempHist->Reset();
+//    //  tempHist->SetNameTitle(histName.c_str(),histName.c_str());
+//    //  for(int ibin=0; ibin<32; ibin++)
+//    //  {
+//    //    float binValSum = treeChHistBinContentCap0_[nCh][ibin];
+//    //    binValSum+=treeChHistBinContentCap1_[nCh][ibin];
+//    //    binValSum+=treeChHistBinContentCap2_[nCh][ibin];
+//    //    binValSum+=treeChHistBinContentCap3_[nCh][ibin];
+//    //    for(int content = 0; content < binValSum; ++content)
+//    //    {
+//    //      tempHist->Fill(ibin);
+//    //      //if(thisChannelHist != 0)
+//    //      //{
+//    //      //  thisChannelHist->Fill(ibin);
+//    //      //}
+//    //    }
+//
+//    //    if(thisChannelUnevenBinsHist)
+//    //    {
+//    //      if(ibin < 15) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum);
+//    //      if(14<ibin && ibin<22) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/2.0);
+//    //      if(21<ibin && ibin<26) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/3.0);
+//    //      if(25<ibin && ibin<29) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/4.0);
+//    //      if(28<ibin) thisChannelUnevenBinsHist->SetBinContent(ibin+1,thisChannelUnevenBinsHist->GetBinContent(ibin+1)+binValSum/5.0);
+//    //    }
+//
+//    //  }
+//    //  // compute this from the uneven hists --> SIC Nov8 2013
+//    //  //if(thisChannelUnevenBinsHist)
+//    //  //{
+//    //  //  thisHistoData->histoAverages.push_back(thisChannelUnevenBinsHist->GetMean());
+//    //  //  thisHistoData->histoRMSs.push_back(thisChannelUnevenBinsHist->GetRMS());
+//    //  //}
+//
+//
+//    // 
+//    //  if(outputRawHistograms_)
+//    //  {
+//    //    subDir->cd();
+//    //    tempHist->Write();
+//    //  }
+//    //}
   }
 
-  outputRootFile->cd();
-  eventsPerReelPosHist->Write();
-
-
-  rootInputFile_->Close();
-  cout << "Ended loop over events." << endl;
-  cout << "Saw " << emptyChannels << " empty channels total and " << emptyChannelsHFMQ1Q4FEDs << " empty channels in HF- Q1/Q4 FEDs." << endl;
-
-  // write maps
-  outputRootFile->cd();
-  firstEventHistMeanMapsHFM[0]->SetMaximum(5);
-  firstEventHistRMSMapsHFM[0]->SetMaximum(5);
-  firstEventHistMeanMapsHFM[1]->SetMaximum(5);
-  firstEventHistRMSMapsHFM[1]->SetMaximum(5);
-  firstEventHistMeanMapsHFP[0]->SetMaximum(5);
-  firstEventHistRMSMapsHFP[0]->SetMaximum(5);
-  firstEventHistMeanMapsHFP[1]->SetMaximum(5);
-  firstEventHistRMSMapsHFP[1]->SetMaximum(5);
-  
-  firstEventHistMeanMapsHFM[0]->Write();
-  firstEventHistRMSMapsHFM[0]->Write();
-  firstEventHistMeanMapsHFM[1]->Write();
-  firstEventHistRMSMapsHFM[1]->Write();
-  firstEventHistMeanMapsHFP[0]->Write();
-  firstEventHistRMSMapsHFP[0]->Write();
-  firstEventHistMeanMapsHFP[1]->Write();
-  firstEventHistRMSMapsHFP[1]->Write();
-
-  // make images
-  TCanvas* canvasMap = new TCanvas("canvasMap","canvasMap",900,600);
-  gStyle->SetOptStat(11);
-  firstEventHistMeanMapsHFM[0]->Draw("colz"); gPad->Update();
-  TPaveStats *st = (TPaveStats*)firstEventHistMeanMapsHFM[0]->GetListOfFunctions()->FindObject("stats");
-  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMapsHFM[0]->Draw("colz");
-  string fullMapPath = plotsDirName_;
-  fullMapPath+="/";
-  fullMapPath+=firstEventHistMeanMapsHFM[0]->GetName();
-  fullMapPath+=".png";
-  canvasMap->Print(fullMapPath.c_str());
-  firstEventHistMeanMapsHFM[1]->Draw("colz"); gPad->Update();
-  st = (TPaveStats*)firstEventHistMeanMapsHFM[1]->GetListOfFunctions()->FindObject("stats");
-  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMapsHFM[1]->Draw("colz");
-  fullMapPath = plotsDirName_;
-  fullMapPath+="/";
-  fullMapPath+=firstEventHistMeanMapsHFM[1]->GetName();
-  fullMapPath+=".png";
-  canvasMap->Print(fullMapPath.c_str());
-  firstEventHistMeanMapsHFP[0]->Draw("colz"); gPad->Update();
-  st = (TPaveStats*)firstEventHistMeanMapsHFP[0]->GetListOfFunctions()->FindObject("stats");
-  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMapsHFP[0]->Draw("colz");
-  fullMapPath = plotsDirName_;
-  fullMapPath+="/";
-  fullMapPath+=firstEventHistMeanMapsHFP[0]->GetName();
-  fullMapPath+=".png";
-  canvasMap->Print(fullMapPath.c_str());
-  firstEventHistMeanMapsHFP[1]->Draw("colz"); gPad->Update();
-  st = (TPaveStats*)firstEventHistMeanMapsHFP[1]->GetListOfFunctions()->FindObject("stats");
-  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMapsHFP[1]->Draw("colz");
-  fullMapPath = plotsDirName_;
-  fullMapPath+="/";
-  fullMapPath+=firstEventHistMeanMapsHFP[1]->GetName();
-  fullMapPath+=".png";
-  canvasMap->Print(fullMapPath.c_str());
-  //
-  firstEventHistRMSMapsHFM[0]->Draw("colz"); gPad->Update();
-  st = (TPaveStats*)firstEventHistRMSMapsHFM[0]->GetListOfFunctions()->FindObject("stats");
-  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMapsHFM[0]->Draw("colz");
-  fullMapPath = plotsDirName_;
-  fullMapPath+="/";
-  fullMapPath+=firstEventHistRMSMapsHFM[0]->GetName();
-  fullMapPath+=".png";
-  canvasMap->Print(fullMapPath.c_str());
-  firstEventHistRMSMapsHFM[1]->Draw("colz"); gPad->Update();
-  st = (TPaveStats*)firstEventHistRMSMapsHFM[1]->GetListOfFunctions()->FindObject("stats");
-  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMapsHFM[1]->Draw("colz");
-  fullMapPath = plotsDirName_;
-  fullMapPath+="/";
-  fullMapPath+=firstEventHistRMSMapsHFM[1]->GetName();
-  fullMapPath+=".png";
-  canvasMap->Print(fullMapPath.c_str());
-  firstEventHistRMSMapsHFP[0]->Draw("colz"); gPad->Update();
-  st = (TPaveStats*)firstEventHistRMSMapsHFP[0]->GetListOfFunctions()->FindObject("stats");
-  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMapsHFP[0]->Draw("colz");
-  fullMapPath = plotsDirName_;
-  fullMapPath+="/";
-  fullMapPath+=firstEventHistRMSMapsHFP[0]->GetName();
-  fullMapPath+=".png";
-  canvasMap->Print(fullMapPath.c_str());
-  firstEventHistRMSMapsHFP[1]->Draw("colz"); gPad->Update();
-  st = (TPaveStats*)firstEventHistRMSMapsHFP[1]->GetListOfFunctions()->FindObject("stats");
-  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMapsHFP[1]->Draw("colz");
-  fullMapPath = plotsDirName_;
-  fullMapPath+="/";
-  fullMapPath+=firstEventHistRMSMapsHFP[1]->GetName();
-  fullMapPath+=".png";
-  canvasMap->Print(fullMapPath.c_str());
-
-  gStyle->SetOptStat(2222211);
-
-  // do quality checks
-  for(set<string>::const_iterator itr = garageHistUnevenNameSet.begin(); itr != garageHistUnevenNameSet.end(); ++itr)
-  {
-    TH1F* sourceGarageHist = (TH1F*)gDirectory->GetList()->FindObject(itr->c_str());
-    string abHistName = *itr;
-    abHistName = abHistName.substr(0,abHistName.find("Garage"));
-    cout << "abHistName=" << abHistName << endl;
-    abHistName+="Absorber";
-    cout << "abHistName2=" << abHistName << endl;
-    TH1F* sourceAbsorberHist = (TH1F*)gDirectory->GetList()->FindObject(abHistName.c_str());
-    if(!sourceAbsorberHist)
-    {
-      cout << "ERROR: could not find source absorber hist:" << abHistName << endl;
-      continue;
-    }
-    sourceGarageHist->Scale(sourceAbsorberHist->Integral(0,10)/sourceGarageHist->Integral(0,10));
-    // look for excess
-    if(sourceAbsorberHist->Integral(11,31)/sourceGarageHist->Integral(11,31) < 5)
-      cout << "ERROR: ratio of events in tail (bins 11-31) (sourceAbsorber/sourceGarage) < 5 for this hist: " << sourceAbsorberHist << endl;
-
-    TCanvas* t = new TCanvas("canvas","canvas",900,600);
-    t->cd();
-    t->SetLogy();
-    sourceGarageHist->SetStats(0);
-    sourceGarageHist->Draw();
-    sourceAbsorberHist->SetStats(0);
-    sourceAbsorberHist->SetLineColor(2);
-    sourceAbsorberHist->Draw("same");
-    string imgName = *itr;
-    imgName = imgName.substr(0,imgName.find("Garage"));
-    imgName+="AbsorberAndGarageOverlay";
-    string fullPath = plotsDirName_;
-    fullPath+="/";
-    fullPath+=imgName;
-    fullPath+=".png";
-    cout << "fullPath=" << fullPath << endl;
-    t->Print(fullPath.c_str());
-    delete t;
-  }
-  // write per-channel source in/out hists; 
-  for(set<string>::const_iterator itr = garageHistNameSet.begin(); itr != garageHistNameSet.end(); ++itr)
-    gDirectory->GetList()->FindObject(itr->c_str())->Write();
-  for(set<string>::const_iterator itr = absorberHistNameSet.begin(); itr != absorberHistNameSet.end(); ++itr)
-    gDirectory->GetList()->FindObject(itr->c_str())->Write();
-  // uneven
-  for(set<string>::const_iterator itr = garageHistUnevenNameSet.begin(); itr != garageHistUnevenNameSet.end(); ++itr)
-    gDirectory->GetList()->FindObject(itr->c_str())->Write();
-  for(set<string>::const_iterator itr = absorberHistUnevenNameSet.begin(); itr != absorberHistUnevenNameSet.end(); ++itr)
-    gDirectory->GetList()->FindObject(itr->c_str())->Write();
-
-
+  eventTree_->SetBranchStatus("*",0);
+  eventTree_->SetBranchStatus("chHistMean",1);
+  eventTree_->SetBranchStatus("reelPos",1);
+  eventTree_->SetBranchStatus("eventNum",1);
+  eventTree_->SetBranchStatus("nChInEvent",1);
+  eventTree_->SetBranchStatus("chDenseIndex",1);
+  eventTree_->SetBranchStatus("chHistBinContentCap0",1);
+  eventTree_->SetBranchStatus("chHistBinContentCap1",1);
+  eventTree_->SetBranchStatus("chHistBinContentCap2",1);
+  eventTree_->SetBranchStatus("chHistBinContentCap3",1);
   // now make plots of avgVal vs. event number
   vector<string> imageNamesThisTube; 
   vector<string> reelImageNamesThisTube;
-
   startHtml();
-
   cout << "Beginning loop over tubes." << endl;
-  outputRootFile->cd();
+  // make plots of chAvg vs. reel and event for each tube
   for(set<string>::const_iterator tubeItr = tubeNameSet.begin(); tubeItr != tubeNameSet.end(); ++tubeItr)
   {
     string thisTube = *tubeItr;
     cout << "Found tube: " << thisTube << endl;
-    imageNamesThisTube.clear();
-    reelImageNamesThisTube.clear();
-    for(map<pair<string,HcalDetId>,RawHistoData*>::const_iterator itr = rawHistoDataMap.begin();
-        itr != rawHistoDataMap.end(); ++itr)
-    {
-      RawHistoData data = *(itr->second);
-      if(data.tubeName != thisTube) // only consider current tube
-        continue;
 
-      // compute avg y value for plot scaling
-      float yavg = 0;
-      int count = 0;
-      for(std::vector<float>::const_iterator i = data.histoAverages.begin(); i != data.histoAverages.end(); ++i)
+    map<HcalDetId,vector<float> > mapHistMeansForCh;
+    map<HcalDetId,vector<float> > mapEventNumsForCh;
+    map<HcalDetId,vector<float> > mapReelPosForCh;
+    map<HcalDetId,TH1F*> mapRawHistForCh;
+
+    int nevents = eventTree_->GetEntries();
+    for(int evt=0; evt < nevents; ++evt)
+    {
+      if((evt+1) > maxEvents_)
+        break;
+
+      eventTree_->GetEntry(evt);
+      // make dirs
+      outputRootFile->cd();
+      TDirectory* subDir = 0;
+      if(outputRawHistograms_)
       {
-        yavg+=*i;
-        count++;
+        TDirectory* tubeDir = (TDirectory*) outputRootFile->GetDirectory(thisTube.c_str());
+        if(!tubeDir)
+          tubeDir = outputRootFile->mkdir(thisTube.c_str());
+        string blockDirName = getBlockEventDirName(treeEventNum_);
+        string blockDirPath = thisTube;
+        blockDirPath+="/";
+        blockDirPath+=blockDirName;
+        TDirectory* blockEventDir = (TDirectory*) outputRootFile->GetDirectory(blockDirPath.c_str());
+        if(!blockEventDir)
+          blockEventDir = tubeDir->mkdir(blockDirName.c_str());
+        string directoryName = "event";
+        directoryName+=intToString(treeEventNum_);
+        string dirPath = blockDirPath;
+        dirPath+="/";
+        dirPath+=directoryName;
+        subDir = (TDirectory*) outputRootFile->GetDirectory(dirPath.c_str());
+        if(!subDir)
+          subDir = blockEventDir->mkdir(directoryName.c_str());
+        subDir->cd();
       }
-      yavg/=count;
-      //// make eventNum errs
-      //vector<float> eventNumErrs;
-      //for(std::vector<float>::const_iterator i = data.eventNumbers.begin(); i != data.eventNumbers.end(); ++i)
-      //  eventNumErrs.push_back(0);
-      //TGraphErrors* thisGraph = new TGraphErrors(data.eventNumbers.size(),&(*data.eventNumbers.begin()),
-      //    &(*data.histoAverages.begin()),&(*eventNumErrs.begin()),&(*data.histoRMSs.begin()));
-      TGraph* thisGraph = new TGraph(data.eventNumbers.size(),&(*data.eventNumbers.begin()),&(*data.histoAverages.begin()));
-      string graphName = getGraphName(data.detId,data.tubeName);
+      // end of make dirs
+      for(int nCh = 0; nCh < treeNChInEvent_; ++nCh)
+      {
+        HcalDetId detId = HcalDetId::detIdFromDenseIndex(treeChDenseIndex_[nCh]);
+
+        if(selectDigiBasedOnTubeName_)
+          if(!isDigiAssociatedToSourceTube(detId,thisTube))
+            continue;
+
+        mapHistMeansForCh[detId].push_back(treeChHistMean_[nCh]);
+        mapEventNumsForCh[detId].push_back(treeEventNum_);
+        mapReelPosForCh[detId].push_back(treeReelPos_);
+        // raw hist
+        if(outputRawHistograms_)
+        {
+          string histName = getRawHistName(treeEventNum_,detId.ieta(),detId.iphi(),detId.depth());
+          TH1F* tempHist = new TH1F("tempHist","tempHist",32,0,31);
+          tempHist->SetDirectory(0);
+          tempHist->SetNameTitle(histName.c_str(),histName.c_str());
+          for(int ibin=0; ibin<32; ibin++)
+          {
+            float binValSum = treeChHistBinContentCap0_[nCh][ibin];
+            binValSum+=treeChHistBinContentCap1_[nCh][ibin];
+            binValSum+=treeChHistBinContentCap2_[nCh][ibin];
+            binValSum+=treeChHistBinContentCap3_[nCh][ibin];
+            tempHist->SetBinContent(ibin+1,binValSum);
+            //for(int content = 0; content < binValSum; ++content)
+            //{
+            //  tempHist->Fill(ibin);
+            //  //if(thisChannelHist != 0)
+            //  //{
+            //  //  thisChannelHist->Fill(ibin);
+            //  //}
+            //}
+          }
+          tempHist->Write();
+          delete tempHist;
+        }
+      }
+    }
+
+    TH2F* histMeanMaps[3];
+    TH2F* histRMSMaps[3];
+    for(int i=0; i<3; ++i)
+    {
+      string histAvgMapName="histAvgMapAllEventsDepth";
+      histAvgMapName+=intToString(i+1);
+      histAvgMapName+="_";
+      histAvgMapName+=thisTube;
+      string histAvgMapTitle="histMean depth ";
+      histAvgMapTitle+=intToString(i+1);
+      histAvgMapTitle+=";i#eta;i#phi";
+      histMeanMaps[i] = new TH2F(histAvgMapName.c_str(),histAvgMapTitle.c_str(),85,-42.5,42.5,72,0.5,72.5);
+      string histRMSMapName="histRMSMapAllEventsDepth";
+      histRMSMapName+=intToString(i);
+      histRMSMapName+="_";
+      histRMSMapName+=thisTube;
+      string histRMSMapTitle="histRMS depth ";
+      histRMSMapTitle+=intToString(i+1);
+      histRMSMapTitle+=";i#eta;i#phi";
+      histRMSMaps[i]= new TH2F(histRMSMapName.c_str(),histRMSMapTitle.c_str(),85,-42.5,42.5,72,0.5,72.5);
+    }
+    // fill histAvg vs reel and event; dist of hist avgs
+    for(map<HcalDetId,vector<float> >::const_iterator mapItr = mapHistMeansForCh.begin(); mapItr != mapHistMeansForCh.end(); ++mapItr)
+    {
+      HcalDetId thisDetId = mapItr->first;
+      // hist avgs
+      string histAvgDistName = getGraphName(thisDetId,thisTube);
+      histAvgDistName+="histAvgDistAllEvents";
+      TH1F* thisPlot = new TH1F(histAvgDistName.c_str(),histAvgDistName.c_str(),3200,0,31);
+      // fill plot
+      for(std::vector<float>::const_iterator i = mapHistMeansForCh[thisDetId].begin(); i != mapHistMeansForCh[thisDetId].end(); ++i)
+        thisPlot->Fill(*i);
+      float yavg = thisPlot->GetMean();
+      float yrms = thisPlot->GetRMS();
+      if(thisDetId.iphi()==31 && thisDetId.ieta()==-29)
+        cout << "channel: " << thisDetId << " fill avg=" << yavg << endl;
+      histMeanMaps[thisDetId.depth()-1]->Fill(thisDetId.ieta(),thisDetId.iphi(),yavg);
+      histRMSMaps[thisDetId.depth()-1]->Fill(thisDetId.ieta(),thisDetId.iphi(),yrms);
+      TCanvas* canvas = new TCanvas("canvas","canvas",900,600);
+      canvas->cd();
+      thisPlot->Draw();
+      thisPlot->GetXaxis()->SetTitle("hist. mean [ADC]");
+      thisPlot->Write();
+      TGraph* thisGraph = new TGraph(mapEventNumsForCh[thisDetId].size(),&(*mapEventNumsForCh[thisDetId].begin()),&(*mapHistMeansForCh[thisDetId].begin()));
+      string graphName = getGraphName(thisDetId,thisTube);
       thisGraph->SetTitle(graphName.c_str());
       thisGraph->SetName(graphName.c_str());
       thisGraph->Draw();
       thisGraph->GetXaxis()->SetTitle("Event");
-      //thisGraph->GetYaxis()->SetTitle("hist. mean+/-RMS [ADC]");
       thisGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
       thisGraph->GetYaxis()->SetRangeUser(yavg-0.5,yavg+0.5);
-      thisGraph->SetMarkerStyle(33);
-      thisGraph->SetMarkerSize(0.8);
-      TCanvas* canvas = new TCanvas("canvas","canvas",900,600);
-      canvas->cd();
       thisGraph->Draw("ap");
       thisGraph->Write();
       std::string fullPath = plotsDirName_;
@@ -944,8 +860,8 @@ int main(int argc, char ** argv)
       canvas->Print(fullPath.c_str());
       imageNamesThisTube.push_back(fullPath);
       delete thisGraph;
-      TGraph* reelGraph = new TGraph(data.reelPositions.size(),&(*data.reelPositions.begin()),&(*data.histoAverages.begin()));
-      string reelGraphName = getGraphName(data.detId,data.tubeName);
+      TGraph* reelGraph = new TGraph(mapReelPosForCh[thisDetId].size(),&(*mapReelPosForCh[thisDetId].begin()),&(*mapHistMeansForCh[thisDetId].begin()));
+      string reelGraphName = getGraphName(thisDetId,thisTube);
       reelGraphName+="reelPosition";
       reelGraph->SetTitle(reelGraphName.c_str());
       reelGraph->SetName(reelGraphName.c_str());
@@ -953,9 +869,7 @@ int main(int argc, char ** argv)
       reelGraph->Draw();
       reelGraph->GetXaxis()->SetTitle("Reel [mm]");
       reelGraph->GetYaxis()->SetTitle("hist. mean [ADC]");
-      reelGraph->GetYaxis()->SetRangeUser(yavg-0.4,yavg+0.4);
-      reelGraph->SetMarkerStyle(33);
-      reelGraph->SetMarkerSize(0.8);
+      reelGraph->GetYaxis()->SetRangeUser(yavg-0.5,yavg+0.5);
       reelGraph->Draw("ap");
       reelGraph->Write();
       fullPath = plotsDirName_;
@@ -967,31 +881,33 @@ int main(int argc, char ** argv)
       delete reelGraph;
       delete canvas;
     }
+    for(int i=0; i<3; ++i)
+    {
+      histMeanMaps[i]->Write();
+      histRMSMaps[i]->Write();
+    }
     appendHtml(thisTube,imageNamesThisTube,thisTube+"_histAvgsVsEvent.html");
     appendHtml(thisTube,reelImageNamesThisTube,thisTube+"_histAvgsVsReel.html");
     if(selectDigiBasedOnTubeName_)
       appendHtmlMainPage(thisTube,imageNamesThisTube,reelImageNamesThisTube);
-  }
+    }
   cout << "Ending loop over tubes." << endl;
 
-  finishHtml(tubeNameSet);
 
+  //outputRootFile->cd();
   cout << "Making driver info plots." << endl;
+  eventTree_->SetBranchStatus("*",1);
   // make driver info graphs
   TDirectory* dInfoPlotsDir = outputRootFile->mkdir("driverInfoPlots");
   dInfoPlotsDir->cd();
-  //TGraph* eventNumVsOrbitNumGraph = new TGraph(evtNumbers_.size(),&(*orbitNumbers_.begin()),&(*evtNumbers_.begin()));
-  //eventNumVsOrbitNumGraph->Draw();
-  //eventNumVsOrbitNumGraph->GetXaxis()->SetTitle("orbit");
-  //eventNumVsOrbitNumGraph->GetYaxis()->SetTitle("event");
-  //eventNumVsOrbitNumGraph->SetName("naiveEventNumVsOrbitNumGraph");
-  //eventNumVsOrbitNumGraph->Write();
-
-  TGraph* eventNumVsOrbitNumSecsGraph = new TGraph(evtNumbers_.size(),&(*orbitNumberSecs_.begin()),&(*evtNumbers_.begin()));
+  //
+  eventTree_->Draw("eventNum:88.9e-6*(orbitNum+bx/3564)","","goff");
+  TGraph* eventNumVsOrbitNumSecsGraph = new TGraph(eventTree_->GetSelectedRows(), eventTree_->GetV2(), eventTree_->GetV1());
   eventNumVsOrbitNumSecsGraph->Draw();
   eventNumVsOrbitNumSecsGraph->GetXaxis()->SetTitle("orbit [s]");
   eventNumVsOrbitNumSecsGraph->GetYaxis()->SetTitle("event");
   eventNumVsOrbitNumSecsGraph->SetName("naiveEventNumVsOrbitNumSecsGraph");
+  eventNumVsOrbitNumSecsGraph->SetTitle("");
   eventNumVsOrbitNumSecsGraph->Write();
 
   //TGraph* messageCounterVsOrbitNumGraph = new TGraph(messageCounterVals_.size(),&(*orbitNumberSecs_.begin()),&(*messageCounterVals_.begin()));
@@ -1002,19 +918,23 @@ int main(int argc, char ** argv)
   //messageCounterVsOrbitNumGraph->SetTitle("");
   //messageCounterVsOrbitNumGraph->Write();
 
-  TGraph* indexVsOrbitNumGraph = new TGraph(indexVals_.size(),&(*orbitNumberSecs_.begin()),&(*indexVals_.begin()));
-  indexVsOrbitNumGraph->SetName("indexVsOrbitNumGraph");
-  indexVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  indexVsOrbitNumGraph->GetYaxis()->SetTitle("index");
-  indexVsOrbitNumGraph->SetTitle("");
-  indexVsOrbitNumGraph->Write();
+  eventTree_->Draw("index:88.9e-6*(orbitNum+bx/3564)","","goff");
+  TGraph* indexVsOrbitNumSecsGraph = new TGraph(eventTree_->GetSelectedRows(), eventTree_->GetV2(), eventTree_->GetV1());
+  indexVsOrbitNumSecsGraph->SetName("indexVsOrbitNumSecsGraph");
+  indexVsOrbitNumSecsGraph->Draw();
+  indexVsOrbitNumSecsGraph->GetXaxis()->SetTitle("orbit [s]");
+  indexVsOrbitNumSecsGraph->GetYaxis()->SetTitle("index");
+  indexVsOrbitNumSecsGraph->SetTitle("");
+  indexVsOrbitNumSecsGraph->Write();
 
-  TGraph* motorCurrentVsOrbitNumGraph = new TGraph(motorCurrentVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorCurrentVals_.begin()));
-  motorCurrentVsOrbitNumGraph->SetName("motorCurrentVsOrbitNumGraph");
-  motorCurrentVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  motorCurrentVsOrbitNumGraph->GetYaxis()->SetTitle("motor current [mA]");
-  motorCurrentVsOrbitNumGraph->SetTitle("");
-  motorCurrentVsOrbitNumGraph->Write();
+  eventTree_->Draw("motorCurrent:88.9e-6*(orbitNum+bx/3564)","","goff");
+  TGraph* motorCurrentVsOrbitNumSecsGraph = new TGraph(eventTree_->GetSelectedRows(), eventTree_->GetV2(), eventTree_->GetV1());
+  motorCurrentVsOrbitNumSecsGraph->SetName("motorCurrentVsOrbitNumSecsGraph");
+  motorCurrentVsOrbitNumSecsGraph->Draw();
+  motorCurrentVsOrbitNumSecsGraph->GetXaxis()->SetTitle("orbit [s]");
+  motorCurrentVsOrbitNumSecsGraph->GetYaxis()->SetTitle("motor current [mA]");
+  motorCurrentVsOrbitNumSecsGraph->SetTitle("");
+  motorCurrentVsOrbitNumSecsGraph->Write();
 
   //TGraph* motorVoltageVsOrbitNumGraph = new TGraph(motorVoltageVals_.size(),&(*orbitNumberSecs_.begin()),&(*motorVoltageVals_.begin()));
   //motorVoltageVsOrbitNumGraph->SetName("motorVoltageVsOrbitNumGraph");
@@ -1024,7 +944,8 @@ int main(int argc, char ** argv)
   //motorVoltageVsOrbitNumGraph->SetTitle("");
   //motorVoltageVsOrbitNumGraph->Write();
 
-  TGraph* motorCurrentVsReelPosGraph = new TGraph(motorCurrentVals_.size(),&(*reelVals_.begin()),&(*motorCurrentVals_.begin()));
+  eventTree_->Draw("motorCurrent:reelPos","","goff");
+  TGraph* motorCurrentVsReelPosGraph = new TGraph(eventTree_->GetSelectedRows(), eventTree_->GetV2(), eventTree_->GetV1());
   motorCurrentVsReelPosGraph->SetName("motorCurrentVsReelPosGraph");
   motorCurrentVsReelPosGraph->Draw();
   motorCurrentVsReelPosGraph->GetXaxis()->SetTitle("reel [mm]");
@@ -1040,12 +961,14 @@ int main(int argc, char ** argv)
   //motorVoltageVsReelPosGraph->SetTitle("");
   //motorVoltageVsReelPosGraph->Write();
 
-  TGraph* reelVsOrbitNumGraph = new TGraph(reelVals_.size(),&(*orbitNumberSecs_.begin()),&(*reelVals_.begin()));
-  reelVsOrbitNumGraph->SetName("reelVsOrbitNumGraph");
-  reelVsOrbitNumGraph->GetXaxis()->SetTitle("orbit [s]");
-  reelVsOrbitNumGraph->GetYaxis()->SetTitle("reel [mm]");
-  reelVsOrbitNumGraph->SetTitle("");
-  reelVsOrbitNumGraph->Write();
+  eventTree_->Draw("reelPos:88.9e-6*(orbitNum+bx/3564)","","goff");
+  TGraph* reelVsOrbitNumSecsGraph = new TGraph(eventTree_->GetSelectedRows(), eventTree_->GetV2(), eventTree_->GetV1());
+  reelVsOrbitNumSecsGraph->SetName("reelVsOrbitNumGraph");
+  reelVsOrbitNumSecsGraph->Draw();
+  reelVsOrbitNumSecsGraph->GetXaxis()->SetTitle("orbit [s]");
+  reelVsOrbitNumSecsGraph->GetYaxis()->SetTitle("reel [mm]");
+  reelVsOrbitNumSecsGraph->SetTitle("");
+  reelVsOrbitNumSecsGraph->Write();
 
   //TGraph* triggerTimestampVsOrbitNumGraph = new TGraph(triggerTimeStampVals_.size(),&(*orbitNumberSecs_.begin()),&(*triggerTimeStampVals_.begin()));
   //triggerTimestampVsOrbitNumGraph->SetName("triggerTimestampVsOrbitNumGraph");
@@ -1077,15 +1000,19 @@ int main(int argc, char ** argv)
   //messageCounterVsEventNumGraph->SetTitle("");
   //messageCounterVsEventNumGraph->Write();
 
-  TGraph* indexVsEventNumGraph = new TGraph(indexVals_.size(),&(*evtNumbers_.begin()),&(*indexVals_.begin()));
+  eventTree_->Draw("index:eventNum","","goff");
+  TGraph* indexVsEventNumGraph = new TGraph(eventTree_->GetSelectedRows(), eventTree_->GetV2(), eventTree_->GetV1());
   indexVsEventNumGraph->SetName("indexVsEventNumGraph");
+  indexVsEventNumGraph->Draw();
   indexVsEventNumGraph->GetXaxis()->SetTitle("event");
   indexVsEventNumGraph->GetYaxis()->SetTitle("index");
   indexVsEventNumGraph->SetTitle("");
   indexVsEventNumGraph->Write();
 
-  TGraph* motorCurrentVsEventNumGraph = new TGraph(motorCurrentVals_.size(),&(*evtNumbers_.begin()),&(*motorCurrentVals_.begin()));
+  eventTree_->Draw("motorCurrent:eventNum","","goff");
+  TGraph* motorCurrentVsEventNumGraph = new TGraph(eventTree_->GetSelectedRows(), eventTree_->GetV2(), eventTree_->GetV1());
   motorCurrentVsEventNumGraph->SetName("motorCurrentVsEventNumGraph");
+  motorCurrentVsEventNumGraph->Draw();
   motorCurrentVsEventNumGraph->GetXaxis()->SetTitle("event");
   motorCurrentVsEventNumGraph->GetYaxis()->SetTitle("motor current [mA]");
   motorCurrentVsEventNumGraph->SetTitle("");
@@ -1099,8 +1026,10 @@ int main(int argc, char ** argv)
   //motorVoltageVsEventNumGraph->SetTitle("");
   //motorVoltageVsEventNumGraph->Write();
 
-  TGraph* reelVsEventNumGraph = new TGraph(reelVals_.size(),&(*evtNumbers_.begin()),&(*reelVals_.begin()));
+  eventTree_->Draw("reelPos:eventNum","","goff");
+  TGraph* reelVsEventNumGraph = new TGraph(eventTree_->GetSelectedRows(), eventTree_->GetV2(), eventTree_->GetV1());
   reelVsEventNumGraph->SetName("reelVsEventNumGraph");
+  reelVsEventNumGraph->Draw();
   reelVsEventNumGraph->GetXaxis()->SetTitle("event");
   reelVsEventNumGraph->GetYaxis()->SetTitle("reel [mm]");
   reelVsEventNumGraph->SetTitle("");
@@ -1120,6 +1049,146 @@ int main(int argc, char ** argv)
   //timeStamp1VsEventNumGraph->SetTitle("");
   //timeStamp1VsEventNumGraph->Write();
   cout << "Done making driver info plots." << endl;
+
+  rootInputFile_->Close();
+
+  cout << "Ended loop over events." << endl;
+  cout << "Saw " << emptyChannels.size() << " empty channels total." << endl;
+
+  for(map<HcalDetId, float>::const_iterator itr = firstEventHistMeanValsMap.begin(); itr != firstEventHistMeanValsMap.end(); ++itr)
+  {
+    HcalDetId detId = itr->first;
+    float mean = itr->second;
+    firstEventHistMeanMaps[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),mean);
+    if(detId.subdet()==HcalEndcap && detId.ieta() < 0)
+      firstEventHistMeanDistHEM->Fill(mean);
+  }
+  for(map<HcalDetId, float>::const_iterator itr = firstEventHistRMSValsMap.begin(); itr != firstEventHistRMSValsMap.end(); ++itr)
+  {
+    HcalDetId detId = itr->first;
+    float rms = itr->second;
+    firstEventHistRMSMaps[detId.depth()-1]->Fill(detId.ieta(),detId.iphi(),rms);
+  }
+  // write maps
+  outputRootFile->cd();
+  //
+  firstEventHistMeanMaps[0]->Write();
+  firstEventHistRMSMaps[0]->Write();
+  firstEventHistMeanMaps[1]->Write();
+  firstEventHistRMSMaps[1]->Write();
+  firstEventHistMeanMaps[2]->Write();
+  firstEventHistRMSMaps[2]->Write();
+  firstEventHistMeanDistHEM->Write();
+  // make images -- maps
+  TCanvas* canvasMap = new TCanvas("canvasMap","canvasMap",900,600);
+  gStyle->SetOptStat(11);
+  firstEventHistMeanMaps[0]->Draw("colz"); gPad->Update();
+  TPaveStats *st = (TPaveStats*)firstEventHistMeanMaps[0]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMaps[0]->Draw("colz");
+  string fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistMeanMaps[0]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistMeanMaps[1]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistMeanMaps[1]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMaps[1]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistMeanMaps[1]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistMeanMaps[2]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistMeanMaps[1]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistMeanMaps[1]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistMeanMaps[2]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  //
+  firstEventHistRMSMaps[0]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistRMSMaps[0]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMaps[0]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistRMSMaps[0]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistRMSMaps[1]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistRMSMaps[1]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMaps[1]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistRMSMaps[1]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+  firstEventHistRMSMaps[2]->Draw("colz"); gPad->Update();
+  st = (TPaveStats*)firstEventHistRMSMaps[1]->GetListOfFunctions()->FindObject("stats");
+  st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);firstEventHistRMSMaps[1]->Draw("colz");
+  fullMapPath = plotsDirName_;
+  fullMapPath+="/";
+  fullMapPath+=firstEventHistRMSMaps[2]->GetName();
+  fullMapPath+=".png";
+  canvasMap->Print(fullMapPath.c_str());
+
+  gStyle->SetOptStat(2222211);
+
+//  // do quality checks
+//  for(set<string>::const_iterator itr = garageHistUnevenNameSet.begin(); itr != garageHistUnevenNameSet.end(); ++itr)
+//  {
+//    TH1F* sourceGarageHist = (TH1F*)gDirectory->GetList()->FindObject(itr->c_str());
+//    string abHistName = *itr;
+//    abHistName = abHistName.substr(0,abHistName.find("Garage"));
+//    cout << "abHistName=" << abHistName << endl;
+//    abHistName+="Absorber";
+//    cout << "abHistName2=" << abHistName << endl;
+//    TH1F* sourceAbsorberHist = (TH1F*)gDirectory->GetList()->FindObject(abHistName.c_str());
+//    if(!sourceAbsorberHist)
+//    {
+//      cout << "ERROR: could not find source absorber hist:" << abHistName << endl;
+//      continue;
+//    }
+//    sourceGarageHist->Scale(sourceAbsorberHist->Integral(0,10)/sourceGarageHist->Integral(0,10));
+//    // look for excess
+//    if(sourceAbsorberHist->Integral(11,31)/sourceGarageHist->Integral(11,31) < 5)
+//      cout << "ERROR: ratio of events in tail (bins 11-31) (sourceAbsorber/sourceGarage) < 5 for this hist: " << sourceAbsorberHist << endl;
+//
+//    TCanvas* t = new TCanvas("canvas","canvas",900,600);
+//    t->cd();
+//    t->SetLogy();
+//    sourceGarageHist->SetStats(0);
+//    sourceGarageHist->Draw();
+//    sourceAbsorberHist->SetStats(0);
+//    sourceAbsorberHist->SetLineColor(2);
+//    sourceAbsorberHist->Draw("same");
+//    string imgName = *itr;
+//    imgName = imgName.substr(0,imgName.find("Garage"));
+//    imgName+="AbsorberAndGarageOverlay";
+//    string fullPath = plotsDirName_;
+//    fullPath+="/";
+//    fullPath+=imgName;
+//    fullPath+=".png";
+//    cout << "fullPath=" << fullPath << endl;
+//    t->Print(fullPath.c_str());
+//    delete t;
+//  }
+//  outputRootFile->cd();
+//  // write per-channel source in/out hists; 
+//  for(set<string>::const_iterator itr = garageHistNameSet.begin(); itr != garageHistNameSet.end(); ++itr)
+//    gDirectory->GetList()->FindObject(itr->c_str())->Write();
+//  for(set<string>::const_iterator itr = absorberHistNameSet.begin(); itr != absorberHistNameSet.end(); ++itr)
+//    gDirectory->GetList()->FindObject(itr->c_str())->Write();
+//  // uneven
+//  for(set<string>::const_iterator itr = garageHistUnevenNameSet.begin(); itr != garageHistUnevenNameSet.end(); ++itr)
+//    gDirectory->GetList()->FindObject(itr->c_str())->Write();
+//  for(set<string>::const_iterator itr = absorberHistUnevenNameSet.begin(); itr != absorberHistUnevenNameSet.end(); ++itr)
+//    gDirectory->GetList()->FindObject(itr->c_str())->Write();
+
+
+
+  finishHtml(tubeNameSet);
+
   gROOT->GetListOfFiles()->Remove(outputRootFile);
 
   outputRootFile->Close();

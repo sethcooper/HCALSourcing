@@ -713,13 +713,14 @@ int main(int argc, char ** argv)
   eventTree_->SetBranchStatus("chHistBinContentCap2",1);
   eventTree_->SetBranchStatus("chHistBinContentCap3",1);
   // now make plots of avgVal vs. event number
-  vector<string> imageNamesThisTube; 
-  vector<string> reelImageNamesThisTube;
   startHtml();
   cout << "Beginning loop over tubes." << endl;
   // make plots of chAvg vs. reel and event for each tube
   for(set<string>::const_iterator tubeItr = tubeNameSet.begin(); tubeItr != tubeNameSet.end(); ++tubeItr)
   {
+    vector<string> imageNamesThisTube; 
+    vector<string> reelImageNamesThisTube;
+
     string thisTube = *tubeItr;
     cout << "Found tube: " << thisTube << endl;
 

@@ -702,6 +702,7 @@ int main(int argc, char ** argv)
   }
 
   eventTree_->SetBranchStatus("*",0);
+  eventTree_->SetBranchStatus("tubeName",1);
   eventTree_->SetBranchStatus("chHistMean",1);
   eventTree_->SetBranchStatus("reelPos",1);
   eventTree_->SetBranchStatus("eventNum",1);
@@ -734,6 +735,11 @@ int main(int argc, char ** argv)
         break;
 
       eventTree_->GetEntry(evt);
+      // require that tube being source is the same
+      // only get the events from this tube
+      if(treeTubeName_ != thisTube)
+        continue;
+
       // make dirs
       outputRootFile->cd();
       TDirectory* subDir = 0;
@@ -813,7 +819,7 @@ int main(int argc, char ** argv)
       histAvgMapTitle+=";i#eta;i#phi";
       histMeanMaps[i] = new TH2F(histAvgMapName.c_str(),histAvgMapTitle.c_str(),85,-42.5,42.5,72,0.5,72.5);
       string histRMSMapName="histRMSMapAllEventsDepth";
-      histRMSMapName+=intToString(i);
+      histRMSMapName+=intToString(i+1);
       histRMSMapName+="_";
       histRMSMapName+=thisTube;
       string histRMSMapTitle="histRMS depth ";
@@ -834,8 +840,6 @@ int main(int argc, char ** argv)
         thisPlot->Fill(*i);
       float yavg = thisPlot->GetMean();
       float yrms = thisPlot->GetRMS();
-      if(thisDetId.iphi()==31 && thisDetId.ieta()==-29)
-        cout << "channel: " << thisDetId << " fill avg=" << yavg << endl;
       histMeanMaps[thisDetId.depth()-1]->Fill(thisDetId.ieta(),thisDetId.iphi(),yavg);
       histRMSMaps[thisDetId.depth()-1]->Fill(thisDetId.ieta(),thisDetId.iphi(),yrms);
       TCanvas* canvas = new TCanvas("canvas","canvas",900,600);
@@ -881,10 +885,39 @@ int main(int argc, char ** argv)
       delete reelGraph;
       delete canvas;
     }
+    // make images -- maps
+    TCanvas* canvasMap = new TCanvas("canvasMap","canvasMap",900,600);
+    gStyle->SetOptStat(11);
     for(int i=0; i<3; ++i)
     {
+      gStyle->SetPaintTextFormat(".2f");
+      histMeanMaps[i]->SetMinimum(histMeanMaps[i]->GetMinimum(0)-0.1);
       histMeanMaps[i]->Write();
+      histMeanMaps[i]->Draw("colztext"); gPad->Update();
+      TPaveStats *st = (TPaveStats*)histMeanMaps[i]->GetListOfFunctions()->FindObject("stats");
+      st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);histMeanMaps[i]->Draw("colztext");
+      // hardcoded range
+      histMeanMaps[i]->GetXaxis()->SetRangeUser(-30,-15);
+      histMeanMaps[i]->GetYaxis()->SetRangeUser(29,43);
+      string fullMapPath = plotsDirName_;
+      fullMapPath+="/";
+      fullMapPath+=histMeanMaps[i]->GetName();
+      fullMapPath+=".png";
+      canvasMap->Print(fullMapPath.c_str());
+      gStyle->SetPaintTextFormat(".4f");
+      histRMSMaps[i]->SetMinimum(histRMSMaps[i]->GetMinimum(0)-0.0005);
       histRMSMaps[i]->Write();
+      histRMSMaps[i]->Draw("colztext"); gPad->Update();
+      st = (TPaveStats*)histRMSMaps[i]->GetListOfFunctions()->FindObject("stats");
+      st->SetX1NDC(0.8);st->SetX2NDC(0.995);st->SetY1NDC(0.93);st->SetY2NDC(0.995);histRMSMaps[i]->Draw("colztext");
+      // hardcoded range
+      histRMSMaps[i]->GetXaxis()->SetRangeUser(-30,-15);
+      histRMSMaps[i]->GetYaxis()->SetRangeUser(29,43);
+      fullMapPath = plotsDirName_;
+      fullMapPath+="/";
+      fullMapPath+=histRMSMaps[i]->GetName();
+      fullMapPath+=".png";
+      canvasMap->Print(fullMapPath.c_str());
     }
     appendHtml(thisTube,imageNamesThisTube,thisTube+"_histAvgsVsEvent.html");
     appendHtml(thisTube,reelImageNamesThisTube,thisTube+"_histAvgsVsReel.html");

@@ -76,12 +76,14 @@ def CreateCfgs(runNumber):
 
 # RUN
 runsList = [
-    215637
+    217090
 ]
 
+dataDir = "/data2/scooper/Sourcing/December_HEM09_10_11"
+#dataDir = "/data2/scooper/Sourcing/P5_Tests_JustBefore_December2013HEM"
 #dataDir = "/data2/scooper/Sourcing/P5_Tests_JustBefore_October2013HFM"
 #dataDir = "/data2/scooper/Sourcing/AfterOctoberHFM_Tests"
-dataDir = "/data2/scooper/Sourcing/October_HFM_Q1_Q4"
+#dataDir = "/data2/scooper/Sourcing/October_HFM_Q1_Q4"
 #dataDir = "/mnt/bigspool/usc"
 
 for run in runsList:

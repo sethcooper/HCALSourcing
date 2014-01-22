@@ -807,6 +807,7 @@ int main(int argc, char ** argv)
       }
     }
 
+    outputRootFile->cd();
     TH2F* histMeanMaps[3];
     TH2F* histRMSMaps[3];
     for(int i=0; i<3; ++i)
@@ -928,7 +929,6 @@ int main(int argc, char ** argv)
   cout << "Ending loop over tubes." << endl;
 
 
-  //outputRootFile->cd();
   cout << "Making driver info plots." << endl;
   eventTree_->SetBranchStatus("*",1);
   // make driver info graphs

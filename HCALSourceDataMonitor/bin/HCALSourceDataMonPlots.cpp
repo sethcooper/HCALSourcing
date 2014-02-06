@@ -810,6 +810,7 @@ int main(int argc, char ** argv)
     outputRootFile->cd();
     TH2F* histMeanMaps[3];
     TH2F* histRMSMaps[3];
+    TH2F* histOccupancyMaps[3];
     for(int i=0; i<3; ++i)
     {
       string histAvgMapName="histAvgMapAllEventsDepth";
@@ -828,6 +829,14 @@ int main(int argc, char ** argv)
       histRMSMapTitle+=intToString(i+1);
       histRMSMapTitle+=";i#eta;i#phi";
       histRMSMaps[i]= new TH2F(histRMSMapName.c_str(),histRMSMapTitle.c_str(),85,-42.5,42.5,72,0.5,72.5);
+      string histOccMapName="histOccupancyMapAllEventsDepth";
+      histOccMapName+=intToString(i+1);
+      histOccMapName+="_";
+      histOccMapName+=thisTube;
+      string histOccMapTitle="histOccupancy depth ";
+      histOccMapTitle+=intToString(i+1);
+      histOccMapTitle+=";i#eta;i#phi";
+      histOccupancyMaps[i] = new TH2F(histOccMapName.c_str(),histOccMapTitle.c_str(),85,-43,42,72,0.0,72.0);
     }
     // fill histAvg vs reel and event; dist of hist avgs
     for(map<HcalDetId,vector<float> >::const_iterator mapItr = mapHistMeansForCh.begin(); mapItr != mapHistMeansForCh.end(); ++mapItr)
@@ -844,6 +853,7 @@ int main(int argc, char ** argv)
       float yrms = thisPlot->GetRMS();
       histMeanMaps[thisDetId.depth()-1]->Fill(thisDetId.ieta(),thisDetId.iphi(),yavg);
       histRMSMaps[thisDetId.depth()-1]->Fill(thisDetId.ieta(),thisDetId.iphi(),yrms);
+      histOccupancyMaps[thisDetId.depth()-1]->Fill(thisDetId.ieta(),thisDetId.iphi(),1);
       TCanvas* canvas = new TCanvas("canvas","canvas",900,600);
       canvas->cd();
       thisPlot->Draw();
@@ -920,6 +930,7 @@ int main(int argc, char ** argv)
       fullMapPath+=histRMSMaps[i]->GetName();
       fullMapPath+=".png";
       canvasMap->Print(fullMapPath.c_str());
+      histOccupancyMaps[i]->Write();
     }
     appendHtml(thisTube,imageNamesThisTube,thisTube+"_histAvgsVsEvent.html");
     appendHtml(thisTube,reelImageNamesThisTube,thisTube+"_histAvgsVsReel.html");

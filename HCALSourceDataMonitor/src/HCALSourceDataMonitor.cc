@@ -99,7 +99,8 @@ class HCALSourceDataMonitor : public edm::EDAnalyzer {
       int treeReelPos_;
       float treeTimestamp1_;
       float treeTriggerTimestamp_;
-      char treeTubeName_[100];
+      char treeTubeName_[50];
+      char treeTubeDescription_[100];
       uint32_t treeDriverStatus_;
       int treeNChInEvent_;
       uint32_t treeChDenseIndex_[MAXCHPEREVENT];
@@ -156,6 +157,7 @@ HCALSourceDataMonitor::HCALSourceDataMonitor(const edm::ParameterSet& iConfig) :
   eventTree_->Branch("timestamp1",&treeTimestamp1_);
   eventTree_->Branch("triggerTimestamp",&treeTriggerTimestamp_);
   eventTree_->Branch("tubeName",treeTubeName_,"tubeName/C");
+  eventTree_->Branch("tubeDescription",treeTubeDescription_,"tubeDescription/C");
   eventTree_->Branch("driverStatus",&treeDriverStatus_);
   eventTree_->Branch("nChInEvent",&treeNChInEvent_);
   eventTree_->Branch("chDenseIndex",treeChDenseIndex_,"chDenseIndex[nChInEvent]/i");
@@ -298,6 +300,7 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   //string tubeName = "H2_HB_PHI11_LAYER0_SRCTUBE"; // example tube for H2
   //string tubeName = "HFM01_ETA29_PHI55_T1A_SRCTUBE"; // example tube for HF/P5
   string tubeName = spd->tubeNameFromCoord();
+  string tubeDesc = spd->tubeDescriptionFromSD();
 
   int eventNum = iEvent.id().event();
   treeEventNum_ = eventNum;
@@ -312,10 +315,13 @@ HCALSourceDataMonitor::analyze(const edm::Event& iEvent, const edm::EventSetup& 
   treeTriggerTimestamp_ = trigtimebase;
   treeTimestamp1_ = timebase;
   strcpy(treeTubeName_,tubeName.c_str());
+  strcpy(treeTubeDescription_,tubeDesc.c_str());
 
   //
   //cout << "Event: " << eventNum << endl;
   //cout << "Source position info looks like: " << *spd << endl;
+  //cout << "tubeName length: " << tubeName.length() << endl;
+  //cout << "tubeDesc length: " << spd->tubeDescriptionFromSD().length() << endl;
 
   vector<Handle<HcalHistogramDigiCollection> > hcalHistDigiCollHandleVec;
   iEvent.getManyByType(hcalHistDigiCollHandleVec);
